@@ -65,15 +65,14 @@ _STAT_EXPAND: dict[str, str] = {
     "L":    "Losses",
 }
 
-# Column layout — fixed, always the same
-_COLUMNS     = ["YEAR", "PLAYER", "TEAM", "STAT"]
-
-# Relative weight ratios
+# Relative weight ratios (columns built dynamically at render time)
 _COL_WEIGHTS: dict[str, float] = {
     "YEAR":   0.9,
     "PLAYER": 3.5,
     "TEAM":   1.1,
     "STAT":   1.0,
+    "EXTRA1": 1.0,
+    "EXTRA2": 1.0,
 }
 
 
@@ -146,7 +145,16 @@ class HistoryCardRenderer:
 
         W, H  = cfg.width_px, cfg.height_px
         PAD   = max(8, round(W * 0.012))
-        cols  = _COLUMNS
+
+        # Build column list dynamically
+        cols: list[str] = ["YEAR", "PLAYER"]
+        if not _is_team_scope(cfg.scope):
+            cols.append("TEAM")
+        cols.append("STAT")
+        if entries and entries[0].extra_stat_1_label:
+            cols.append("EXTRA1")
+        if entries and entries[0].extra_stat_2_label:
+            cols.append("EXTRA2")
 
         # --- Font sizing ---
         num_rows     = max(len(entries), 1)
@@ -212,14 +220,23 @@ class HistoryCardRenderer:
         y += title_h
 
         # --- Column header row ---
+        _extra1_lbl = entries[0].extra_stat_1_label if entries else ""
+        _extra2_lbl = entries[0].extra_stat_2_label if entries else ""
         draw.rectangle([0, y, W, y + col_header_h], fill=cfg.header_bg)
         x = PAD
         for col, cw in zip(cols, col_widths):
-            lbl = cfg.sort_stat if col == "STAT" else col
+            if col == "STAT":
+                lbl = cfg.sort_stat
+            elif col == "EXTRA1":
+                lbl = _extra1_lbl
+            elif col == "EXTRA2":
+                lbl = _extra2_lbl
+            else:
+                lbl = col
             if col == "PLAYER":
                 self._draw_left_text(draw, lbl, x, y, col_header_h,
                                      header_font, cfg.header_fg)
-            elif col == "STAT":
+            elif col in ("STAT", "EXTRA1", "EXTRA2"):
                 self._draw_right_col(draw, lbl, x, cw, y, col_header_h,
                                      header_font, cfg.header_fg)
             else:
@@ -264,6 +281,12 @@ class HistoryCardRenderer:
                                          row_font, cfg.text_color)
                 elif col == "STAT":
                     self._draw_right_col(draw, entry.stat_value, x, cw, y, row_h,
+                                         row_font, cfg.text_color)
+                elif col == "EXTRA1":
+                    self._draw_right_col(draw, entry.extra_stat_1_value, x, cw, y, row_h,
+                                         row_font, cfg.text_color)
+                elif col == "EXTRA2":
+                    self._draw_right_col(draw, entry.extra_stat_2_value, x, cw, y, row_h,
                                          row_font, cfg.text_color)
                 x += cw
 

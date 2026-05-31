@@ -73,9 +73,9 @@ _GROUP_FG = "#1A2B3C"
 
 # Short explanatory subtitle for each roster type (rendered below the title)
 _ROSTER_TYPE_SUBTITLE: dict[str, str] = {
-    "Active 26-Man": "Active 26-Man  ·  players eligible to play today",
-    "40-Man":        "40-Man  ·  full roster including IL & optioned players",
-    "Main Starters": "Main Starters  ·  projected starting lineup",
+    "Active 26-Man": "Active 26-Man  ·  Players Eligible To Play Today",
+    "40-Man":        "40-Man  ·  Full Roster Including IL & Optioned Players",
+    "Main Starters": "Main Starters  ·  Projected Starting Lineup",
 }
 
 
@@ -238,7 +238,7 @@ class RosterCardRenderer:
                 draw, title_text, PAD, W, 0, _title_zone_h, title_font, cfg.title_fg)
         # Subtitle: roster type explanation in the lower portion of the title bar
         self._draw_centered_text_in_range(
-            draw, sub_text, PAD, W, _title_zone_h, title_h, sub_font, cfg.title_fg)
+            draw, sub_text, PAD, W, _title_zone_h, _sub_zone_h, sub_font, cfg.title_fg)
         y += title_h
 
         # --- Column header row ---

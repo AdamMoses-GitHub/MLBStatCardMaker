@@ -32,6 +32,32 @@ PITCHING_SORT_LABELS = PITCHER_SORT_LABELS  # ["ERA", "WHIP", "W", ...]
 
 STAT_TYPE_OPTIONS = ["Batting", "Pitching"]
 
+# Companion stats shown alongside each primary sort stat
+_BATTING_COMPANIONS: dict[str, tuple[str, str]] = {
+    "OPS":  ("AVG", "HR"),
+    "AVG":  ("OBP", "HR"),
+    "HR":   ("RBI", "AVG"),
+    "RBI":  ("HR",  "AVG"),
+    "OBP":  ("AVG", "SLG"),
+    "SLG":  ("OBP", "HR"),
+    "H":    ("AVG", "RBI"),
+    "BB":   ("OBP", "AVG"),
+    "SB":   ("AVG", "HR"),
+}
+
+_PITCHING_COMPANIONS: dict[str, tuple[str, str]] = {
+    "ERA":  ("WHIP", "SO"),
+    "WHIP": ("ERA",  "SO"),
+    "W":    ("SO",   "ERA"),
+    "SO":   ("ERA",  "WHIP"),
+    "IP":   ("SO",   "ERA"),
+    "SV":   ("ERA",  "WHIP"),
+    "HLD":  ("ERA",  "WHIP"),
+    "BB":   ("ERA",  "WHIP"),
+    "HR":   ("ERA",  "WHIP"),
+    "L":    ("ERA",  "WHIP"),
+}
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -44,6 +70,10 @@ class HistoryEntry:
     team_name: str
     stat_value: str        # display string, e.g. ".982" or "2.45"
     is_current_season: bool
+    extra_stat_1_label: str = ""
+    extra_stat_1_value: str = ""
+    extra_stat_2_label: str = ""
+    extra_stat_2_value: str = ""
 
 
 YEAR_SORT_OPTIONS = ["Ascending", "Descending"]
@@ -64,6 +94,20 @@ class HistoryBlock:
 # ---------------------------------------------------------------------------
 # Fetch
 # ---------------------------------------------------------------------------
+
+def _read_extra_stats(player, companions: tuple, field_map: dict) -> list[tuple[str, str]]:
+    """Return [(label, value), (label, value)] for up to 2 companion stats."""
+    result: list[tuple[str, str]] = []
+    for label in companions[:2]:
+        fld = field_map.get(label, "")
+        if fld:
+            result.append((label, str(getattr(player, fld, ""))))
+        else:
+            result.append(("", ""))
+    while len(result) < 2:
+        result.append(("", ""))
+    return result
+
 
 def fetch_history(
     scope: str,
@@ -114,6 +158,8 @@ def fetch_history(
                 field = BATTER_FIELD_MAP.get(sort_stat, "ops")
                 raw   = getattr(top, field)
                 value = str(raw) if not isinstance(raw, float) else f"{raw:.3f}"
+                _companions = _BATTING_COMPANIONS.get(sort_stat, ())
+                _extra = _read_extra_stats(top, _companions, BATTER_FIELD_MAP)
             else:
                 block, _ = fetch_pitchers_cached(
                     season=season,
@@ -130,6 +176,8 @@ def fetch_history(
                 top   = trimmed[0]
                 field = PITCHER_FIELD_MAP.get(sort_stat, "era")
                 value = str(getattr(top, field))
+                _companions = _PITCHING_COMPANIONS.get(sort_stat, ())
+                _extra = _read_extra_stats(top, _companions, PITCHER_FIELD_MAP)
 
             entries.append(HistoryEntry(
                 season=season,
@@ -138,6 +186,10 @@ def fetch_history(
                 team_name=top.team_name,
                 stat_value=value,
                 is_current_season=(season == current_year),
+                extra_stat_1_label=_extra[0][0],
+                extra_stat_1_value=_extra[0][1],
+                extra_stat_2_label=_extra[1][0],
+                extra_stat_2_value=_extra[1][1],
             ))
         except Exception as exc:
             logger.warning("History: could not fetch season %d: %s", season, exc)
