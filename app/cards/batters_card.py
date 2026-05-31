@@ -196,6 +196,7 @@ class BattersCardConfig(CardConfig):
     show_logos: bool = True
     simple_title: bool = False
     show_jersey_number: bool = False
+    show_position: bool = False
     show_col_explainers: bool = False
     col_explainer_sep: str = "="
 
@@ -354,15 +355,17 @@ class BattersCardRenderer:
                 elif col == "PLAYER":
                     avail_w = cw - 6
                     name = entry.player_name
-                    suffix = f" #{entry.jersey_number}" if (cfg.show_jersey_number and entry.jersey_number) else ""
-                    full = name + suffix
+                    jersey = f" #{entry.jersey_number}" if (cfg.show_jersey_number and entry.jersey_number) else ""
+                    pos    = f" ({entry.position})"    if (cfg.show_position   and entry.position)       else ""
+                    full = name + jersey + pos
                     if row_font.getbbox(full)[2] > avail_w:
-                        # try full name without number
-                        if row_font.getbbox(name)[2] > avail_w:
-                            # truncate to last name, drop number
-                            parts = name.split()
-                            name = parts[-1] if parts else name
-                        full = name  # number dropped on truncation
+                        # drop position suffix first, then jersey number, then truncate name
+                        full = name + jersey
+                        if row_font.getbbox(full)[2] > avail_w:
+                            full = name
+                            if row_font.getbbox(full)[2] > avail_w:
+                                parts = name.split()
+                                full = parts[-1] if parts else name
                     self._draw_left_text(draw, full, x, y, row_h, row_font, cfg.text_color)
                 elif col == "TEAM":
                     tx = x

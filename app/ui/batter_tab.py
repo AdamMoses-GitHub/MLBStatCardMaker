@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 
 from app.settings import Settings
+from app.utils.image_utils import apply_export_margin
 from app.cards.batters_card import (
     BattersCardConfig, BattersCardRenderer,
     suggest_column_mode, EXTENDED_MIN_WIDTH_IN,
@@ -155,6 +156,11 @@ class BatterTab(ttk.Frame):
         self._show_jersey_var = tk.BooleanVar(value=self.settings.batters_show_jersey_number)
         ttk.Checkbutton(opt_frame, text="Show jersey number inline",
                          variable=self._show_jersey_var).pack(
+            anchor="w", padx=8, pady=2)
+
+        self._show_position_var = tk.BooleanVar(value=self.settings.batters_show_position)
+        ttk.Checkbutton(opt_frame, text="Show position after name  e.g. (CF)",
+                         variable=self._show_position_var).pack(
             anchor="w", padx=8, pady=2)
 
         self._show_logos_var = tk.BooleanVar(value=self.settings.batters_show_logos)
@@ -416,6 +422,7 @@ class BatterTab(ttk.Frame):
             simple_title=self._simple_title_var.get(),
             show_rank_badges=self._show_badges_var.get(),
             show_jersey_number=self._show_jersey_var.get(),
+            show_position=self._show_position_var.get(),
             show_logos=self._show_logos_var.get(),
             show_col_explainers=self._show_explainers_var.get(),
             col_explainer_sep=self.settings.col_explainer_sep,
@@ -492,7 +499,10 @@ class BatterTab(ttk.Frame):
         out_path = os.path.join(output_dir, filename)
         try:
             cfg = self._build_card_config()
-            saved = cfg.export(self._card_image, out_path, fmt)
+            export_img = apply_export_margin(
+                self._card_image, cfg.bg_color,
+                self.settings.export_canvas_margin_pct)
+            saved = cfg.export(export_img, out_path, fmt)
             messagebox.showinfo("Exported", f"Saved to:\n{saved}")
         except Exception as exc:
             messagebox.showerror("Export Failed", str(exc))
@@ -516,6 +526,7 @@ class BatterTab(ttk.Frame):
         self.settings.batters_simple_title     = self._simple_title_var.get()
         self.settings.batters_show_rank_badges  = self._show_badges_var.get()
         self.settings.batters_show_jersey_number = self._show_jersey_var.get()
+        self.settings.batters_show_position    = self._show_position_var.get()
         self.settings.batters_show_logos       = self._show_logos_var.get()
         self.settings.batters_width_in        = self._width_var.get()
         self.settings.batters_height_in       = self._height_var.get()

@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 
 from app.settings import Settings
+from app.utils.image_utils import apply_export_margin
 from app.cards.roster_card import RosterCardConfig, RosterCardRenderer
 from app.data.roster_api import (
     fetch_roster,
@@ -121,6 +122,16 @@ class RosterTab(ttk.Frame):
                         variable=self._age_var).pack(
             anchor="w", padx=8, pady=1)
 
+        self._hide_pitchers_var = tk.BooleanVar(value=self.settings.roster_hide_pitchers)
+        ttk.Checkbutton(opt_frame, text="Hide pitchers",
+                        variable=self._hide_pitchers_var).pack(
+            anchor="w", padx=8, pady=1)
+
+        self._hide_dh_var = tk.BooleanVar(value=self.settings.roster_hide_dh)
+        ttk.Checkbutton(opt_frame, text="Hide DH",
+                        variable=self._hide_dh_var).pack(
+            anchor="w", padx=8, pady=1)
+
         self._logos_var = tk.BooleanVar(value=self.settings.roster_show_logos)
         ttk.Checkbutton(opt_frame, text="Show team logo in title",
                         variable=self._logos_var).pack(
@@ -129,6 +140,11 @@ class RosterTab(ttk.Frame):
         self._ts_var = tk.BooleanVar(value=self.settings.roster_show_timestamp)
         ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
                         variable=self._ts_var).pack(
+            anchor="w", padx=8, pady=1)
+
+        self._show_explainers_var = tk.BooleanVar(value=self.settings.roster_show_col_explainers)
+        ttk.Checkbutton(opt_frame, text="Show column explainers",
+                        variable=self._show_explainers_var).pack(
             anchor="w", padx=8, pady=(1, 4))
 
         # ---- Background Color ----
@@ -333,6 +349,10 @@ class RosterTab(ttk.Frame):
             show_age=self._age_var.get(),
             show_logos=self._logos_var.get(),
             show_timestamp=self._ts_var.get(),
+            hide_pitchers=self._hide_pitchers_var.get(),
+            hide_dh=self._hide_dh_var.get(),
+            show_col_explainers=self._show_explainers_var.get(),
+            col_explainer_sep=self.settings.col_explainer_sep,
         )
 
     def _update_thumbnail(self) -> None:
@@ -405,7 +425,10 @@ class RosterTab(ttk.Frame):
         out_path = os.path.join(output_dir, filename)
         try:
             cfg   = self._build_card_config()
-            saved = cfg.export(self._card_image, out_path, fmt)
+            export_img = apply_export_margin(
+                self._card_image, cfg.bg_color,
+                self.settings.export_canvas_margin_pct)
+            saved = cfg.export(export_img, out_path, fmt)
             messagebox.showinfo("Exported", f"Saved to:\n{saved}")
         except Exception as exc:
             messagebox.showerror("Export Failed", str(exc))
@@ -422,6 +445,9 @@ class RosterTab(ttk.Frame):
         self.settings.roster_show_age          = self._age_var.get()
         self.settings.roster_show_logos        = self._logos_var.get()
         self.settings.roster_show_timestamp    = self._ts_var.get()
+        self.settings.roster_show_col_explainers = self._show_explainers_var.get()
+        self.settings.roster_hide_pitchers      = self._hide_pitchers_var.get()
+        self.settings.roster_hide_dh            = self._hide_dh_var.get()
         self.settings.roster_width_in          = self._width_var.get()
         self.settings.roster_height_in         = self._height_var.get()
         self.settings.roster_bg_color          = self._bg_var.get()

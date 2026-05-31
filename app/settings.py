@@ -42,6 +42,7 @@ class Settings:
     batters_simple_title: bool = False
     batters_show_rank_badges: bool = True
     batters_show_jersey_number: bool = False
+    batters_show_position: bool = False
     batters_show_logos: bool = True
     batters_width_in: float = 7.0
     batters_height_in: float = 5.0
@@ -96,6 +97,8 @@ class Settings:
     roster_show_age: bool = True
     roster_show_logos: bool = True
     roster_show_timestamp: bool = False
+    roster_hide_pitchers: bool = False
+    roster_hide_dh: bool = False
     roster_width_in: float = 5.0
     roster_height_in: float = 7.0
     roster_bg_color: str = "#FFFFFF"
@@ -120,7 +123,11 @@ class Settings:
     standings_show_col_explainers: bool = False
     batters_show_col_explainers: bool = False
     pitchers_show_col_explainers: bool = False
+    roster_show_col_explainers: bool = False
     col_explainer_sep: str = "="
+
+    # Export canvas margin
+    export_canvas_margin_pct: float = 0.0
 
     # Data cache
     data_cache_ttl_minutes: int = 15

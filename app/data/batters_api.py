@@ -20,6 +20,7 @@ class BatterEntry:
     player_id: int
     player_name: str
     jersey_number: str    # e.g. "99", or "" if unknown
+    position: str         # e.g. "CF", "1B", "DH", or "" if unknown
     team_abbrev: str
     team_name: str
     league_name: str      # "AL" or "NL"
@@ -166,10 +167,14 @@ def fetch_batters(season: Optional[int] = None) -> BattersBlock:
             except ValueError:
                 raw_ops = ".000"
 
+        pos_obj = player.get("primaryPosition", {})
+        position = pos_obj.get("abbreviation", "") if isinstance(pos_obj, dict) else ""
+
         entry = BatterEntry(
             player_id=int(player.get("id", 0)),
             player_name=player.get("fullName", ""),
             jersey_number=str(player.get("primaryNumber", "") or ""),
+            position=position,
             team_abbrev=team.get("abbreviation", "???"),
             team_name=team.get("name", ""),
             league_name=league_short,

@@ -29,6 +29,35 @@ _COL_WEIGHTS: dict[str, float] = {
 _RIGHT_ALIGN_COLS: set[str] = {"AGE"}
 _CENTER_COLS: set[str]      = {"#", "POS", "B/T"}
 
+# Human-readable definitions for each column (used in explainer zone)
+_COL_EXPLAINERS: dict[str, str] = {
+    "#":   "Jersey #",
+    "POS": "Position",
+    "B/T": "Bats/Throws",
+}
+
+# Human-readable position abbreviations shown in the explainer zone
+_POS_EXPLAINERS: dict[str, str] = {
+    "C":   "Catcher",
+    "1B":  "First Base",
+    "2B":  "Second Base",
+    "3B":  "Third Base",
+    "SS":  "Shortstop",
+    "LF":  "Left Field",
+    "CF":  "Center Field",
+    "RF":  "Right Field",
+    "OF":  "Outfield",
+    "DH":  "Designated Hitter",
+    "SP":  "Starting Pitcher",
+    "RP":  "Relief Pitcher",
+    "P":   "Pitcher",
+    "TWP": "Two-Way Player",
+}
+_POS_EXPL_ORDER: list[str] = [
+    "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "OF",
+    "DH", "SP", "RP", "P", "TWP",
+]
+
 # Group sub-header divider colors (alternating shades)
 _GROUP_BG_COLORS: list[str] = [
     "#D6E4F7",  # light blue-grey
@@ -76,6 +105,10 @@ class RosterCardConfig(CardConfig):
     show_age: bool = True
     show_logos: bool = True
     show_timestamp: bool = False
+    hide_pitchers: bool = False
+    hide_dh: bool = False
+    show_col_explainers: bool = False
+    col_explainer_sep: str = "="
 
     # Colors
     title_bg: str = "#1a3a5c"
@@ -103,7 +136,14 @@ class RosterCardRenderer:
 
     def render(self) -> Image.Image:
         cfg     = self.config
-        entries = self.block.entries
+        entries = list(self.block.entries)
+        _exclude: set[str] = set()
+        if cfg.hide_pitchers:
+            _exclude |= {"Starting Pitchers", "Relievers / Closers"}
+        if cfg.hide_dh:
+            _exclude.add("DH")
+        if _exclude:
+            entries = [e for e in entries if e.position_group not in _exclude]
         img     = cfg.new_canvas()
         draw    = ImageDraw.Draw(img)
 
@@ -121,7 +161,20 @@ class RosterCardRenderer:
         title_h      = max(24, round(H * 0.07))
         col_header_h = max(16, round(H * 0.055))
         footer_h     = max(12, round(H * 0.04)) if cfg.show_timestamp else 0
-        available_h  = H - title_h - col_header_h - footer_h - PAD
+        _expl_font_sz = max(7, _pt_px(6, cfg.dpi))
+        _expl_line_h  = max(8, round(_expl_font_sz * 1.6))
+        if cfg.show_col_explainers:
+            _sep = cfg.col_explainer_sep
+            _seen_pos = {e.position_code for e in entries}
+            pos_expl_items = [
+                f"{p}{_sep}{_POS_EXPLAINERS[p]}"
+                for p in _POS_EXPL_ORDER if p in _seen_pos and p in _POS_EXPLAINERS
+            ]
+            explainer_h = _expl_line_h * (2 + (2 if pos_expl_items else 0)) + 8
+        else:
+            pos_expl_items = []
+            explainer_h   = 0
+        available_h  = H - title_h - col_header_h - footer_h - explainer_h - PAD
         row_h        = max(12, available_h // max(num_rows, 1))
 
         title_font_size  = min(max(10, round(title_h * 0.52)),      _pt_px(18, cfg.dpi))
@@ -138,6 +191,7 @@ class RosterCardRenderer:
         row_font    = get_font(row_font_size,     condensed=True)
         group_font  = get_font(group_font_size,   bold=True, condensed=True)
         footer_font = get_font(footer_font_size)
+        expl_font   = get_font(_expl_font_sz) if cfg.show_col_explainers else None
 
         col_widths = _col_widths_px(cols, W, PAD)
         logo_sz    = max(8, round(row_h * 0.65)) if cfg.show_logos else 0
@@ -210,6 +264,46 @@ class RosterCardRenderer:
             draw.rectangle([0, H - footer_h, W, H], fill=cfg.bg_color)
             self._draw_centered_text(draw, ts, H - footer_h, footer_h,
                                      footer_font, cfg.footer_color, W)
+
+        # --- Column explainers ---
+        if cfg.show_col_explainers and explainer_h > 0 and expl_font:
+            sep       = cfg.col_explainer_sep
+            col_items = [f"{col}{sep}{_COL_EXPLAINERS[col]}"
+                         for col in cols if col in _COL_EXPLAINERS]
+            dot       = "  ·  "
+            avail_w   = W - PAD * 2
+            zone_top  = H - footer_h - explainer_h
+            draw.rectangle([0, zone_top, W, zone_top + explainer_h], fill=cfg.bg_color)
+            draw.line([PAD, zone_top + 1, W - PAD, zone_top + 1], fill=cfg.divider_color)
+
+            def _draw_expl_section(items: list, y_top: int, zone_h: int) -> None:
+                full_text = dot.join(items)
+                bbox0 = expl_font.getbbox(full_text)
+                tw = bbox0[2] - bbox0[0]
+                if tw <= avail_w:
+                    th = bbox0[3] - bbox0[1]
+                    tx = (W - tw) // 2
+                    ty = y_top + (zone_h - th) // 2 - bbox0[1]
+                    draw.text((tx, ty), full_text, font=expl_font, fill=cfg.footer_color)
+                else:
+                    mid    = max(1, len(items) // 2)
+                    lines  = [dot.join(items[:mid]), dot.join(items[mid:])]
+                    line_h = zone_h // 2
+                    for i, line_text in enumerate(lines):
+                        lbbox = expl_font.getbbox(line_text)
+                        lw    = lbbox[2] - lbbox[0]
+                        lx    = max(PAD, (W - lw) // 2)
+                        ly_t  = y_top + i * line_h + (line_h - (lbbox[3] - lbbox[1])) // 2 - lbbox[1]
+                        draw.text((lx, ly_t), line_text, font=expl_font, fill=cfg.footer_color)
+
+            col_zone_h = _expl_line_h * 2
+            _draw_expl_section(col_items, zone_top + 4, col_zone_h)
+
+            if pos_expl_items:
+                pos_zone_top = zone_top + col_zone_h + 6
+                draw.line([PAD, pos_zone_top, W - PAD, pos_zone_top],
+                          fill=cfg.divider_color)
+                _draw_expl_section(pos_expl_items, pos_zone_top + 2, _expl_line_h * 2)
 
         return img
 

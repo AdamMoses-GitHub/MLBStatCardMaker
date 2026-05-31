@@ -80,11 +80,26 @@ POSITION_GROUPS: list[str] = [
     "Other",
 ]
 
-ROSTER_TYPE_OPTIONS: list[str] = ["Active 26-Man", "40-Man"]
+ROSTER_TYPE_OPTIONS: list[str] = ["Active 26-Man", "40-Man", "Main Starters"]
 
 _ROSTER_TYPE_API: dict[str, str] = {
     "Active 26-Man": "active",
     "40-Man":        "40Man",
+}
+
+# Canonical field positions for "Main Starters" mode (C → 1B → 2B → 3B → SS → LF → CF → RF)
+_STARTER_POSITIONS: list[str] = ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"]
+
+_STARTER_POS_GROUP: dict[str, str] = {
+    "C":  "Catchers",
+    "1B": "Infielders", "2B": "Infielders", "3B": "Infielders", "SS": "Infielders",
+    "LF": "Outfielders", "CF": "Outfielders", "RF": "Outfielders",
+}
+
+_STARTER_POS_NAME: dict[str, str] = {
+    "C":  "Catcher",
+    "1B": "First Base",  "2B": "Second Base", "3B": "Third Base", "SS": "Shortstop",
+    "LF": "Left Field",  "CF": "Center Field", "RF": "Right Field",
 }
 
 # Position code → group name
@@ -173,7 +188,11 @@ def fetch_roster(
             except Exception as exc:
                 logger.warning("Cache read failed for %s roster: %s", team_abbrev, exc)
 
-    block = _do_fetch(team_abbrev, roster_type)
+    block = (
+        _do_fetch_main_starters(team_abbrev)
+        if roster_type == "Main Starters"
+        else _do_fetch(team_abbrev, roster_type)
+    )
 
     if cache:
         try:
@@ -245,6 +264,82 @@ def _do_fetch(team_abbrev: str, roster_type: str) -> RosterBlock:
         team_abbrev=team_abbrev,
         team_name=team_name,
         roster_type=roster_type,
+        entries=entries,
+    )
+
+
+def _do_fetch_main_starters(team_abbrev: str) -> RosterBlock:
+    """Fetch the active roster and pick the player with the most gamesStarted
+    at each of the 8 standard field positions (C, 1B, 2B, 3B, SS, LF, CF, RF).
+    Uses a single API call with hydrated per-player fielding stats.
+    """
+    team_id = _TEAM_ID_MAP.get(team_abbrev)
+    if team_id is None:
+        raise ValueError(f"Unknown team abbreviation: {team_abbrev!r}")
+
+    season    = datetime.date.today().year
+    team_name = ABBREV_TO_NAME.get(team_abbrev, team_abbrev)
+
+    raw = statsapi.get(
+        "team_roster",
+        {
+            "teamId": team_id,
+            "rosterType": "active",
+            "hydrate": (
+                f"person(currentAge,batSide,pitchHand,"
+                f"stats(type=season,group=fielding,season={season},gameType=R))"
+            ),
+        },
+    )
+
+    roster = raw.get("roster", [])
+
+    # best_at_pos: pos_code -> (gamesStarted, RosterEntry)
+    best_at_pos: dict[str, tuple[int, RosterEntry]] = {}
+
+    for p in roster:
+        person     = p.get("person", {})
+        jersey     = p.get("jerseyNumber", "") or ""
+        bats_side  = person.get("batSide", {})
+        pitch_hand = person.get("pitchHand", {})
+        bats   = bats_side.get("code", "?")  if isinstance(bats_side,  dict) else "?"
+        throws = pitch_hand.get("code", "?") if isinstance(pitch_hand, dict) else "?"
+        try:
+            age = int(person.get("currentAge", 0) or 0)
+        except (ValueError, TypeError):
+            age = 0
+
+        for sg in person.get("stats", []):
+            for split in sg.get("splits", []):
+                pos_code = split.get("position", {}).get("abbreviation", "")
+                if pos_code not in _STARTER_POSITIONS:
+                    continue
+                try:
+                    gs = int(split.get("stat", {}).get("gamesStarted", 0) or 0)
+                except (ValueError, TypeError):
+                    gs = 0
+                current_gs = best_at_pos.get(pos_code, (0, None))[0]
+                if gs > current_gs:
+                    best_at_pos[pos_code] = (gs, RosterEntry(
+                        player_id=int(person.get("id", 0)),
+                        jersey_number=jersey,
+                        player_name=person.get("fullName", "Unknown"),
+                        position_code=pos_code,
+                        position_name=_STARTER_POS_NAME.get(pos_code, pos_code),
+                        position_group=_STARTER_POS_GROUP[pos_code],
+                        bats=bats,
+                        throws=throws,
+                        age=age,
+                    ))
+
+    # Assemble in canonical C → 1B → 2B → 3B → SS → LF → CF → RF order
+    entries = [best_at_pos[pos][1] for pos in _STARTER_POSITIONS if pos in best_at_pos]
+
+    return RosterBlock(
+        as_of=datetime.datetime.now(),
+        team_abbrev=team_abbrev,
+        team_name=team_name,
+        roster_type="Main Starters",
         entries=entries,
     )
 

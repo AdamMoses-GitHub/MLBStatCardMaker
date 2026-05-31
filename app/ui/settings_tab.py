@@ -119,6 +119,20 @@ class SettingsTab(ttk.Frame):
                             variable=self._expl_sep_var,
                             value=sep_val).pack(side="left", padx=(0, 20))
 
+        # ---- Export Canvas Margin ----
+        margin_frame = ttk.LabelFrame(self, text="Export Canvas Margin")
+        margin_frame.pack(fill="x", padx=16, pady=8)
+
+        self._margin_pct_var = tk.DoubleVar(value=self.settings.export_canvas_margin_pct)
+        margin_row = ttk.Frame(margin_frame)
+        margin_row.pack(anchor="w", **pad)
+        ttk.Spinbox(margin_row, from_=0.0, to=20.0, increment=0.5,
+                    textvariable=self._margin_pct_var, width=6).pack(side="left")
+        ttk.Label(margin_row, text="%").pack(side="left", padx=(4, 16))
+        ttk.Label(margin_row,
+                  text="Adds a border of this size around the card on export (PNG/JPG only).",
+                  foreground="#555555").pack(side="left")
+
         # ---- Save button ----
         ttk.Button(self, text="Save Settings", command=self.apply).pack(
             anchor="e", padx=16, pady=(8, 16))
@@ -182,3 +196,7 @@ class SettingsTab(ttk.Frame):
         self.settings.bg_color = self._bg_color_var.get()
         self.settings.data_cache_ttl_minutes = self._cache_ttl_var.get()
         self.settings.col_explainer_sep = self._expl_sep_var.get()
+        try:
+            self.settings.export_canvas_margin_pct = float(self._margin_pct_var.get())
+        except (tk.TclError, ValueError):
+            pass

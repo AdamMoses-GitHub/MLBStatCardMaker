@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 
 from app.settings import Settings
+from app.utils.image_utils import apply_export_margin
 from app.cards.history_card import HistoryCardConfig, HistoryCardRenderer
 from app.data.history_api import (
     fetch_history,
@@ -524,7 +525,10 @@ class HistoryTab(ttk.Frame):
         out_path = os.path.join(output_dir, filename)
         try:
             cfg   = self._build_card_config()
-            saved = cfg.export(self._card_image, out_path, fmt)
+            export_img = apply_export_margin(
+                self._card_image, cfg.bg_color,
+                self.settings.export_canvas_margin_pct)
+            saved = cfg.export(export_img, out_path, fmt)
             messagebox.showinfo("Exported", f"Saved to:\n{saved}")
         except Exception as exc:
             messagebox.showerror("Export Failed", str(exc))
