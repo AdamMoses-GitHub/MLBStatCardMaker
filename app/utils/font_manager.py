@@ -8,13 +8,13 @@ from PIL import ImageFont
 
 _FONT_DIR = Path(__file__).parent.parent.parent / "assets" / "fonts" / "Roboto"
 
-_FONT_FILES: dict[tuple[str, bool, bool], str] = {
-    # (family, bold, condensed)
-    ("Roboto", False, False): "Roboto-Regular.ttf",
-    ("Roboto", True,  False): "Roboto-Bold.ttf",
-    ("Roboto", False, True):  "RobotoCondensed-Regular.ttf",
-    ("Roboto", True,  True):  "RobotoCondensed-Bold.ttf",
-    ("Roboto", "italic", False): "Roboto-Italic.ttf",
+_FONT_FILES: dict[tuple[str, bool, bool, bool], str] = {
+    # (family, bold, condensed, italic)
+    ("Roboto", False, False, False): "Roboto-Regular.ttf",
+    ("Roboto", True,  False, False): "Roboto-Bold.ttf",
+    ("Roboto", False, True,  False): "RobotoCondensed-Regular.ttf",
+    ("Roboto", True,  True,  False): "RobotoCondensed-Bold.ttf",
+    ("Roboto", False, False, True):  "Roboto-Italic.ttf",
 }
 
 
@@ -27,7 +27,7 @@ def get_font(
     family: str = "Roboto",
 ) -> ImageFont.FreeTypeFont:
     """Return a cached PIL ImageFont at the requested size and style."""
-    key = (family, bold, condensed)
+    key = (family, bold, condensed, italic)
     filename = _FONT_FILES.get(key, "Roboto-Regular.ttf")
     path = _FONT_DIR / filename
     if not path.exists():

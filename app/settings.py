@@ -56,6 +56,9 @@ class Settings:
     # Data cache
     data_cache_ttl_minutes: int = 15
 
+    # UI state
+    window_geometry: str = ""
+
     _path: str = field(default="", repr=False, compare=False)
 
     # ------------------------------------------------------------------
@@ -71,13 +74,15 @@ class Settings:
                 # Remove internal/unknown keys before constructing
                 known = {f.name for f in cls.__dataclass_fields__.values()
                          if not f.name.startswith("_")}
+                ignored = [k for k in data if k not in known]
+                if ignored:
+                    logger.debug("Settings: ignored unknown keys: %s", ignored)
                 filtered = {k: v for k, v in data.items() if k in known}
                 obj = cls(**filtered)
                 obj._path = path
                 return obj
             except Exception as exc:
                 logger.warning("Could not load settings from %s: %s — using defaults", path, exc)
-                pass
         obj = cls()
         obj._path = path
         return obj

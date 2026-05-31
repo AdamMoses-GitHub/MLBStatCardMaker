@@ -4,7 +4,7 @@ import os
 import re
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, colorchooser
 
 from PIL import Image, ImageTk
 
@@ -272,7 +272,6 @@ class BatterTab(ttk.Frame):
             self._col_suggest_lbl.config(text="")
 
     def _pick_bg_color(self) -> None:
-        from tkinter import colorchooser
         color = colorchooser.askcolor(
             initialcolor=self._bg_var.get(), title="Background Color")
         if color and color[1]:
@@ -311,6 +310,11 @@ class BatterTab(ttk.Frame):
     # ------------------------------------------------------------------
     def _fetch_and_preview(self, force: bool = False) -> None:
         if self._fetching:
+            return
+        # Validate background color before kicking off the fetch
+        color = self._bg_var.get().strip()
+        if not re.fullmatch(r"#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?", color):
+            self._set_status(f"Invalid background color \u201c{color}\u201d — use #RGB or #RRGGBB", error=True)
             return
         self._fetching = True
         self._fetch_btn.config(state="disabled")

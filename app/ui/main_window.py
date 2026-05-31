@@ -20,6 +20,11 @@ class MainWindow(tk.Tk):
         self.title("MLB Stat Card Maker")
         self.minsize(900, 600)
         self._build()
+        if self.settings.window_geometry:
+            try:
+                self.geometry(self.settings.window_geometry)
+            except tk.TclError:
+                pass
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build(self) -> None:
@@ -73,6 +78,7 @@ class MainWindow(tk.Tk):
         self._standings_tab.apply()
         self._batter_tab.apply()
         self._pitcher_tab.apply()
+        self.settings.window_geometry = self.geometry()
         try:
             self.settings.save(self.settings.working_dir)
         except Exception:

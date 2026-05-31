@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog, colorchooser
 
 from app.settings import Settings
 
@@ -120,7 +120,6 @@ class SettingsTab(ttk.Frame):
 
     # ------------------------------------------------------------------
     def _browse_dir(self) -> None:
-        from tkinter import filedialog
         path = filedialog.askdirectory(title="Select Working Directory",
                                        initialdir=self._working_dir_var.get())
         if path:
@@ -136,7 +135,6 @@ class SettingsTab(ttk.Frame):
         self._orientation_lbl.config(text=f"({label})")
 
     def _pick_bg_color(self) -> None:
-        from tkinter import colorchooser
         color = colorchooser.askcolor(
             initialcolor=self._bg_color_var.get(),
             title="Choose Background Color"

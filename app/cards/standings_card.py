@@ -328,8 +328,8 @@ class StandingsCardRenderer:
         bbox = font.getbbox(text)
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
-        x = (width - tw) // 2
-        ty = y + (h - th) // 2
+        x = (width - tw) // 2 - bbox[0]
+        ty = y + (h - th) // 2 - bbox[1]
         draw.text((x, ty), text, font=font, fill=color)
 
     @staticmethod
@@ -338,8 +338,8 @@ class StandingsCardRenderer:
         bbox = font.getbbox(text)
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
-        x = col_x + (col_w - tw) // 2
-        ty = row_y + (row_h - th) // 2
+        x = col_x + (col_w - tw) // 2 - bbox[0]
+        ty = row_y + (row_h - th) // 2 - bbox[1]
         draw.text((x, ty), text, font=font, fill=color)
 
     @staticmethod
