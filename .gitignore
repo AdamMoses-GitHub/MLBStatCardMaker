@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.conda/
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# App runtime artifacts
+logos/
+*.json
+!requirements*.json
+
+# Exported cards
+*.png
+*.jpg
+*.jpeg
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
