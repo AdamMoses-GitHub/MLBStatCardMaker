@@ -58,6 +58,19 @@ _SCOPE_EXPAND: dict[str, str] = {
     "NL West":    "National League West",
 }
 
+# Maps each scope to the logo pseudo-abbrev used by logo_cache.py
+_SCOPE_LOGO: dict[str, str] = {
+    "All MLB":    "MLB",
+    "AL":         "AL",
+    "NL":         "NL",
+    "AL East":    "AL EAST",
+    "AL Central": "AL CENTRAL",
+    "AL West":    "AL WEST",
+    "NL East":    "NL EAST",
+    "NL Central": "NL CENTRAL",
+    "NL West":    "NL WEST",
+}
+
 
 @dataclass
 class StandingsCardConfig(CardConfig):
@@ -204,9 +217,28 @@ class StandingsCardRenderer:
         y = 0
 
         # --- Title bar ---
+        _tlogo_sz = title_h - 8
+        _tlogo_abbrev = _SCOPE_LOGO.get(cfg.scope) if self.working_dir else None
         title_text = cfg.title_override or self._title_text(title_font, W - PAD * 2)
         draw.rectangle([0, y, W, y + title_h], fill=cfg.title_bg)
-        self._draw_centered_text(draw, title_text, y, title_h, title_font, cfg.title_fg, W)
+        if _tlogo_abbrev:
+            tlogo = get_logo(_tlogo_abbrev, _tlogo_sz, self.working_dir)
+            if tlogo:
+                gap = 8
+                tbbox = title_font.getbbox(title_text)
+                text_w = tbbox[2] - tbbox[0]
+                group_w = _tlogo_sz + gap + text_w
+                group_x = max(PAD, (W - group_w) // 2)
+                ly = y + (title_h - _tlogo_sz) // 2
+                img.paste(tlogo, (group_x, ly), tlogo)
+                th = tbbox[3] - tbbox[1]
+                tx = group_x + _tlogo_sz + gap
+                ty = y + (title_h - th) // 2 - tbbox[1]
+                draw.text((tx, ty), title_text, font=title_font, fill=cfg.title_fg)
+            else:
+                self._draw_centered_text(draw, title_text, y, title_h, title_font, cfg.title_fg, W)
+        else:
+            self._draw_centered_text(draw, title_text, y, title_h, title_font, cfg.title_fg, W)
         y += title_h
 
         # --- Column header row ---

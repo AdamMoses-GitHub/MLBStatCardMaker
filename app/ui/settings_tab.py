@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, colorchooser
 
-from app.settings import Settings
+from app.settings import Settings, init_working_dir
 
 
 class SettingsTab(ttk.Frame):
@@ -28,6 +31,8 @@ class SettingsTab(ttk.Frame):
             side="left", fill="x", expand=True)
         ttk.Button(dir_row, text="Browse…", command=self._browse_dir).pack(
             side="left", padx=(6, 0))
+        ttk.Button(dir_row, text="Open…", command=self._open_working_dir).pack(
+            side="left", padx=(4, 0))
 
         # ---- Default Card Size ----
         size_frame = ttk.LabelFrame(self, text="Default Card Size")
@@ -125,6 +130,18 @@ class SettingsTab(ttk.Frame):
         if path:
             self._working_dir_var.set(path)
 
+    def _open_working_dir(self) -> None:
+        path = self._working_dir_var.get()
+        if not path:
+            return
+        os.makedirs(path, exist_ok=True)
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+
     def _update_orientation(self) -> None:
         try:
             w = self._width_var.get()
@@ -156,7 +173,9 @@ class SettingsTab(ttk.Frame):
     # ------------------------------------------------------------------
     def apply(self) -> None:
         """Write UI values back to the settings object."""
-        self.settings.working_dir = self._working_dir_var.get()
+        new_dir = self._working_dir_var.get()
+        self.settings.working_dir = new_dir
+        init_working_dir(new_dir)
         self.settings.card_width_in = self._width_var.get()
         self.settings.card_height_in = self._height_var.get()
         self.settings.dpi = self._dpi_var.get()

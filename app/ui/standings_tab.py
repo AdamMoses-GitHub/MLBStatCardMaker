@@ -290,7 +290,8 @@ class StandingsTab(ttk.Frame):
             )
             self.after(0, lambda: self._do_render(block, source))
         except Exception as exc:
-            self.after(0, lambda: self._on_fetch_error(str(exc)))
+            msg = str(exc)
+            self.after(0, lambda m=msg: self._on_fetch_error(m))
 
     def _do_render(self, block, source: str = "live") -> None:
         import datetime
@@ -403,7 +404,8 @@ class StandingsTab(ttk.Frame):
                     return
             else:
                 return
-        os.makedirs(working_dir, exist_ok=True)
+        output_dir = os.path.join(working_dir, "output", "standings")
+        os.makedirs(output_dir, exist_ok=True)
         ext = ".png" if fmt == "PNG" else ".jpg"
         raw_name = self._export_name_var.get().strip() or "standings_card"
         # Sanitize: remove characters illegal on Windows/macOS/Linux filesystems
@@ -415,7 +417,7 @@ class StandingsTab(ttk.Frame):
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             base = f"{base}_{ts}"
         filename = base + ext
-        out_path = os.path.join(working_dir, filename)
+        out_path = os.path.join(output_dir, filename)
         try:
             cfg = self._build_card_config()
             saved = cfg.export(self._card_image, out_path, fmt)

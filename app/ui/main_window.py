@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
 import tkinter as tk
 from tkinter import ttk
 
+logger = logging.getLogger(__name__)
+
 from app.settings import Settings
 from app.ui.settings_tab import SettingsTab
 from app.ui.standings_tab import StandingsTab
 from app.ui.batter_tab import BatterTab
 from app.ui.pitcher_tab import PitcherTab
+from app.ui.history_tab import HistoryTab
+from app.ui.roster_tab import RosterTab
+from app.ui.matchup_tab import MatchupTab
 
 
 class MainWindow(tk.Tk):
@@ -35,11 +41,17 @@ class MainWindow(tk.Tk):
         self._settings_tab = SettingsTab(self.notebook, self.settings)
         self._batter_tab = BatterTab(self.notebook, self.settings)
         self._pitcher_tab = PitcherTab(self.notebook, self.settings)
+        self._history_tab = HistoryTab(self.notebook, self.settings)
+        self._roster_tab  = RosterTab(self.notebook, self.settings)
+        self._matchup_tab = MatchupTab(self.notebook, self.settings)
 
         self.notebook.add(self._standings_tab, text="  Standings  ")
-        self.notebook.add(self._batter_tab,   text="  Best Batters  ")
-        self.notebook.add(self._pitcher_tab,  text="  Best Pitchers  ")
-        self.notebook.add(self._settings_tab, text="  Settings  ")
+        self.notebook.add(self._batter_tab,    text="  Top Batters  ")
+        self.notebook.add(self._pitcher_tab,   text="  Top Pitchers  ")
+        self.notebook.add(self._history_tab,   text="  Season Leaders  ")
+        self.notebook.add(self._roster_tab,    text="  Team Roster  ")
+        self.notebook.add(self._matchup_tab,   text="  Matchup  ")
+        self.notebook.add(self._settings_tab,  text="  Settings  ")
 
         # --- Persistent bottom bar ---
         bar = ttk.Frame(self, relief="groove")
@@ -52,8 +64,8 @@ class MainWindow(tk.Tk):
 
         ttk.Button(
             btn_frame,
-            text="Open Working Directory",
-            command=self._open_working_dir,
+            text="Open Output Directory",
+            command=self._open_output_dir,
         ).pack(side="left")
 
         ttk.Button(
@@ -62,8 +74,8 @@ class MainWindow(tk.Tk):
             command=self._on_close,
         ).pack(side="right")
 
-    def _open_working_dir(self) -> None:
-        path = self.settings.working_dir
+    def _open_output_dir(self) -> None:
+        path = os.path.join(self.settings.working_dir, "output")
         os.makedirs(path, exist_ok=True)
         if sys.platform == "win32":
             os.startfile(path)
@@ -78,9 +90,12 @@ class MainWindow(tk.Tk):
         self._standings_tab.apply()
         self._batter_tab.apply()
         self._pitcher_tab.apply()
+        self._history_tab.apply()
+        self._roster_tab.apply()
+        self._matchup_tab.apply()
         self.settings.window_geometry = self.geometry()
         try:
             self.settings.save(self.settings.working_dir)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("Failed to save settings: %s", exc)
         self.destroy()

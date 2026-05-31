@@ -10,20 +10,23 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 
 from app.settings import Settings
-from app.cards.pitchers_card import (
-    PitchersCardConfig, PitchersCardRenderer,
-    suggest_column_mode, EXTENDED_MIN_WIDTH_IN, STANDARD_MIN_WIDTH_IN,
+from app.cards.history_card import HistoryCardConfig, HistoryCardRenderer
+from app.data.history_api import (
+    fetch_history,
+    BATTING_SORT_LABELS,
+    PITCHING_SORT_LABELS,
+    STAT_TYPE_OPTIONS,
+    YEAR_SORT_OPTIONS,
 )
-from app.data.pitchers_api import (
-    PITCHER_SCOPE_OPTIONS, PITCHER_TYPE_OPTIONS, SORT_STAT_LABELS,
-    fetch_pitchers_cached, filter_pitchers, sort_and_trim,
-)
+from app.data.batters_api import BATTER_SCOPE_OPTIONS
 
 THUMB_W = 480
 THUMB_H = 320
 
+_CURRENT_YEAR = datetime.date.today().year
 
-class PitcherTab(ttk.Frame):
+
+class HistoryTab(ttk.Frame):
     def __init__(self, parent: ttk.Notebook, settings: Settings, **kwargs):
         super().__init__(parent, **kwargs)
         self.settings = settings
@@ -55,8 +58,8 @@ class PitcherTab(ttk.Frame):
         size_frame = ttk.LabelFrame(parent, text="Card Size")
         size_frame.pack(fill="x", padx=8, pady=(8, 4))
 
-        self._width_var  = tk.DoubleVar(value=self.settings.pitchers_width_in)
-        self._height_var = tk.DoubleVar(value=self.settings.pitchers_height_in)
+        self._width_var  = tk.DoubleVar(value=self.settings.history_width_in)
+        self._height_var = tk.DoubleVar(value=self.settings.history_height_in)
 
         row = ttk.Frame(size_frame)
         row.pack(anchor="w", **pad)
@@ -84,19 +87,19 @@ class PitcherTab(ttk.Frame):
         scope_frame = ttk.LabelFrame(parent, text="Scope")
         scope_frame.pack(fill="x", padx=8, pady=4)
 
-        self._scope_var = tk.StringVar(value=self.settings.pitchers_scope)
+        self._scope_var = tk.StringVar(value=self.settings.history_scope)
         ttk.Combobox(scope_frame, textvariable=self._scope_var,
-                     values=PITCHER_SCOPE_OPTIONS, state="readonly", width=20).pack(
+                     values=BATTER_SCOPE_OPTIONS, state="readonly", width=20).pack(
             anchor="w", **pad)
 
-        # ---- Pitcher Type ----
-        type_frame = ttk.LabelFrame(parent, text="Pitcher Type")
+        # ---- Stat Type ----
+        type_frame = ttk.LabelFrame(parent, text="Stat Type")
         type_frame.pack(fill="x", padx=8, pady=4)
 
-        self._type_var = tk.StringVar(value=self.settings.pitchers_pitcher_type)
-        for val in PITCHER_TYPE_OPTIONS:
-            ttk.Radiobutton(type_frame, text=val, variable=self._type_var,
-                            value=val, command=self._on_type_changed).pack(
+        self._stat_type_var = tk.StringVar(value=self.settings.history_stat_type)
+        for val in STAT_TYPE_OPTIONS:
+            ttk.Radiobutton(type_frame, text=val, variable=self._stat_type_var,
+                            value=val, command=self._on_stat_type_changed).pack(
                 anchor="w", padx=8, pady=1)
 
         # ---- Query Options ----
@@ -105,105 +108,106 @@ class PitcherTab(ttk.Frame):
 
         sort_row = ttk.Frame(query_frame)
         sort_row.pack(anchor="w", **pad)
-        ttk.Label(sort_row, text="Sort by:").pack(side="left")
-        self._sort_var = tk.StringVar(value=self.settings.pitchers_sort_stat)
-        ttk.Combobox(sort_row, textvariable=self._sort_var,
-                     values=SORT_STAT_LABELS, state="readonly", width=7).pack(
-            side="left", padx=4)
+        ttk.Label(sort_row, text="Stat (sort by):").pack(side="left")
+        self._sort_var = tk.StringVar(value=self.settings.history_sort_stat)
+        self._sort_cb  = ttk.Combobox(sort_row, textvariable=self._sort_var,
+                                       state="readonly", width=7)
+        self._sort_cb.pack(side="left", padx=4)
+        self._refresh_sort_options()   # populate based on current stat type
 
-        topn_row = ttk.Frame(query_frame)
-        topn_row.pack(anchor="w", **pad)
-        ttk.Label(topn_row, text="Top N:").pack(side="left")
-        self._topn_var = tk.IntVar(value=self.settings.pitchers_top_n)
-        ttk.Spinbox(topn_row, from_=1, to=50, textvariable=self._topn_var,
-                    width=5).pack(side="left", padx=4)
+        # Year range
+        yr_row = ttk.Frame(query_frame)
+        yr_row.pack(anchor="w", **pad)
+        ttk.Label(yr_row, text="Years:").pack(side="left")
 
-        # Min IP (shown for All / Starters)
-        self._minip_row = ttk.Frame(query_frame)
-        self._minip_row.pack(anchor="w", padx=8, pady=(0, 0))
-        ttk.Label(self._minip_row, text="Min IP:").pack(side="left")
-        self._minip_var = tk.DoubleVar(value=self.settings.pitchers_min_ip)
-        ttk.Spinbox(self._minip_row, from_=0.0, to=300.0, increment=5.0,
-                    textvariable=self._minip_var, width=6).pack(side="left", padx=4)
+        y_start = self.settings.history_year_start or (_CURRENT_YEAR - 6)
+        y_end   = self.settings.history_year_end   or _CURRENT_YEAR
+        self._year_start_var = tk.IntVar(value=y_start)
+        self._year_end_var   = tk.IntVar(value=y_end)
 
-        # Min G (shown for Relievers)
-        self._ming_row = ttk.Frame(query_frame)
-        # packed/unpacked dynamically by _on_type_changed
-        ttk.Label(self._ming_row, text="Min G:").pack(side="left")
-        self._ming_var = tk.IntVar(value=self.settings.pitchers_min_g)
-        ttk.Spinbox(self._ming_row, from_=0, to=162, textvariable=self._ming_var,
-                    width=5).pack(side="left", padx=4)
+        ttk.Spinbox(yr_row, from_=1903, to=_CURRENT_YEAR,
+                    textvariable=self._year_start_var, width=6).pack(side="left", padx=(4, 2))
+        ttk.Label(yr_row, text="\u2013").pack(side="left")
+        ttk.Spinbox(yr_row, from_=1903, to=_CURRENT_YEAR,
+                    textvariable=self._year_end_var, width=6).pack(side="left", padx=(2, 0))
 
-        # Spacer to keep frame height consistent
-        self._query_spacer = ttk.Label(query_frame, text="")
-        self._query_spacer.pack(pady=(0, 2))
+        self._range_warn_lbl = ttk.Label(query_frame, text="", foreground="#cc6600",
+                                          wraplength=250)
+        self._range_warn_lbl.pack(anchor="w", padx=8, pady=(0, 2))
+        self._year_start_var.trace_add("write", self._on_year_range_changed)
+        self._year_end_var.trace_add("write",   self._on_year_range_changed)
+        self._on_year_range_changed()
 
-        self._on_type_changed()   # set initial qualifier visibility
+        # Year sort order
+        sort_dir_row = ttk.Frame(query_frame)
+        sort_dir_row.pack(anchor="w", padx=8, pady=(2, 4))
+        ttk.Label(sort_dir_row, text="Year order:").pack(side="left")
+        self._year_sort_var = tk.StringVar(value=self.settings.history_year_sort)
+        for val in YEAR_SORT_OPTIONS:
+            ttk.Radiobutton(sort_dir_row, text=val, variable=self._year_sort_var,
+                            value=val).pack(side="left", padx=(6, 0))
 
-        # ---- Columns ----
-        col_frame = ttk.LabelFrame(parent, text="Columns")
-        col_frame.pack(fill="x", padx=8, pady=4)
+        # ---- Pitching Qualifier (hidden when Batting) ----
+        self._qual_frame = ttk.LabelFrame(parent, text="Pitching Qualifier")
+        # packed/unpacked by _on_stat_type_changed
 
-        self._col_mode_var = tk.StringVar(value=self.settings.pitchers_column_mode)
-        for val, label in [
-                ("auto",     "Auto (suggested)"),
-                ("reduced",  "Reduced  (ERA W L SO WHIP)"),
-                ("standard", "Standard  (ERA W L IP SO BB WHIP)"),
-                ("extended", "Extended  (+SV HLD HR)"),
-        ]:
-            ttk.Radiobutton(col_frame, text=label, variable=self._col_mode_var,
-                            value=val, command=self._update_col_suggestion).pack(
+        self._pitcher_type_var = tk.StringVar(value=self.settings.history_pitcher_type)
+        for val in ("All", "Starters", "Relievers"):
+            ttk.Radiobutton(self._qual_frame, text=val,
+                            variable=self._pitcher_type_var, value=val).pack(
                 anchor="w", padx=8, pady=1)
 
-        self._col_suggest_lbl = ttk.Label(col_frame, text="", foreground="#2255aa")
-        self._col_suggest_lbl.pack(anchor="w", padx=12, pady=(0, 4))
-        self._update_col_suggestion()
+        self._minip_var = tk.DoubleVar(value=self.settings.history_min_ip)
+        minip_row = ttk.Frame(self._qual_frame)
+        minip_row.pack(anchor="w", padx=8, pady=(2, 4))
+        ttk.Label(minip_row, text="Min IP:").pack(side="left")
+        ttk.Spinbox(minip_row, from_=0, to=300, increment=10,
+                    textvariable=self._minip_var, width=6).pack(side="left", padx=4)
+
+        self._ming_var = tk.IntVar(value=self.settings.history_min_g)
+        ming_row = ttk.Frame(self._qual_frame)
+        ming_row.pack(anchor="w", padx=8, pady=(0, 4))
+        ttk.Label(ming_row, text="Min G (RP):").pack(side="left")
+        ttk.Spinbox(ming_row, from_=0, to=162,
+                    textvariable=self._ming_var, width=5).pack(side="left", padx=4)
+
+        # ---- Batting Qualifier (hidden when Pitching) ----
+        self._batter_qual_frame = ttk.LabelFrame(parent, text="Batting Qualifier")
+        # packed/unpacked by _on_stat_type_changed
+
+        self._minpa_var = tk.IntVar(value=self.settings.history_min_pa)
+        minpa_row = ttk.Frame(self._batter_qual_frame)
+        minpa_row.pack(anchor="w", padx=8, pady=4)
+        ttk.Label(minpa_row, text="Min PA:").pack(side="left")
+        ttk.Spinbox(minpa_row, from_=0, to=700,
+                    textvariable=self._minpa_var, width=5).pack(side="left", padx=4)
+
+        self._on_stat_type_changed()   # show correct qualifier frame
 
         # ---- Display Options ----
         opt_frame = ttk.LabelFrame(parent, text="Display Options")
         opt_frame.pack(fill="x", padx=8, pady=4)
 
-        self._show_ts_var = tk.BooleanVar(value=self.settings.pitchers_show_timestamp)
-        ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
-                        variable=self._show_ts_var).pack(
-            anchor="w", padx=8, pady=(4, 2))
-
-        self._simple_title_var = tk.BooleanVar(value=self.settings.pitchers_simple_title)
-        ttk.Checkbutton(opt_frame, text="Simple title ('Top Pitchers')",
-                        variable=self._simple_title_var).pack(
-            anchor="w", padx=8, pady=2)
-
-        self._show_badges_var = tk.BooleanVar(value=self.settings.pitchers_show_rank_badges)
-        ttk.Checkbutton(opt_frame, text="Show rank badges (gold / silver / copper)",
-                        variable=self._show_badges_var).pack(
-            anchor="w", padx=8, pady=2)
-
-        self._show_jersey_var = tk.BooleanVar(value=self.settings.pitchers_show_jersey_number)
-        ttk.Checkbutton(opt_frame, text="Show jersey number inline",
-                        variable=self._show_jersey_var).pack(
-            anchor="w", padx=8, pady=2)
-
-        self._show_logos_var = tk.BooleanVar(value=self.settings.pitchers_show_logos)
+        self._show_logos_var = tk.BooleanVar(value=self.settings.history_show_logos)
         ttk.Checkbutton(opt_frame, text="Show team logos",
                         variable=self._show_logos_var).pack(
-            anchor="w", padx=8, pady=2)
+            anchor="w", padx=8, pady=(4, 2))
 
-        self._show_explainers_var = tk.BooleanVar(
-            value=self.settings.pitchers_show_col_explainers)
-        ttk.Checkbutton(opt_frame, text="Show column explainers",
-                        variable=self._show_explainers_var).pack(
+        self._show_ts_var = tk.BooleanVar(value=self.settings.history_show_timestamp)
+        ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
+                        variable=self._show_ts_var).pack(
             anchor="w", padx=8, pady=(0, 4))
 
         # ---- Background Color ----
         bg_frame = ttk.LabelFrame(parent, text="Background Color")
         bg_frame.pack(fill="x", padx=8, pady=4)
 
-        self._bg_var = tk.StringVar(value=self.settings.pitchers_bg_color)
+        self._bg_var = tk.StringVar(value=self.settings.history_bg_color)
         bg_row = ttk.Frame(bg_frame)
         bg_row.pack(anchor="w", **pad)
         ttk.Entry(bg_row, textvariable=self._bg_var, width=9).pack(side="left")
         self._bg_swatch = tk.Label(bg_row, width=3, relief="sunken",
-                                   background=self.settings.pitchers_bg_color)
+                                   background=self.settings.history_bg_color)
         self._bg_swatch.pack(side="left", padx=3)
         ttk.Button(bg_row, text="Pick\u2026", command=self._pick_bg_color).pack(side="left")
         self._bg_var.trace_add("write", self._on_bg_changed)
@@ -233,13 +237,13 @@ class PitcherTab(ttk.Frame):
         export_frame = ttk.LabelFrame(parent, text="Export")
         export_frame.pack(fill="x", padx=8, pady=(4, 8))
 
-        self._export_name_var = tk.StringVar(value=self.settings.pitchers_export_filename)
+        self._export_name_var = tk.StringVar(value=self.settings.history_export_filename)
         ttk.Label(export_frame, text="Filename (no extension):").pack(
             anchor="w", padx=8, pady=(4, 0))
         ttk.Entry(export_frame, textvariable=self._export_name_var, width=24).pack(
             fill="x", padx=8, pady=2)
 
-        self._append_ts_var = tk.BooleanVar(value=self.settings.pitchers_append_timestamp)
+        self._append_ts_var = tk.BooleanVar(value=self.settings.history_append_timestamp)
         ttk.Checkbutton(export_frame, text="Append timestamp to filename",
                         variable=self._append_ts_var).pack(
             anchor="w", padx=8, pady=(0, 4))
@@ -276,37 +280,40 @@ class PitcherTab(ttk.Frame):
 
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
-        self._update_col_suggestion()
 
-    def _on_type_changed(self, *_) -> None:
-        """Swap Min IP / Min G qualifier row based on selected pitcher type."""
-        ptype = self._type_var.get()
-        if ptype == "Relievers":
-            self._minip_row.pack_forget()
-            self._ming_row.pack(anchor="w", padx=8, pady=(0, 0),
-                                before=self._query_spacer)
+    def _on_stat_type_changed(self, *_) -> None:
+        """Show the correct qualifier frame and update the sort stat combobox."""
+        self._refresh_sort_options()
+        if self._stat_type_var.get() == "Pitching":
+            self._batter_qual_frame.pack_forget()
+            self._qual_frame.pack(fill="x", padx=8, pady=4)
         else:
-            self._ming_row.pack_forget()
-            self._minip_row.pack(anchor="w", padx=8, pady=(0, 0),
-                                 before=self._query_spacer)
+            self._qual_frame.pack_forget()
+            self._batter_qual_frame.pack(fill="x", padx=8, pady=4)
 
-    def _update_col_suggestion(self) -> None:
+    def _refresh_sort_options(self) -> None:
+        stat_type = self._stat_type_var.get()
+        opts = PITCHING_SORT_LABELS if stat_type == "Pitching" else BATTING_SORT_LABELS
+        self._sort_cb["values"] = opts
+        current = self._sort_var.get()
+        if current not in opts:
+            self._sort_var.set(opts[0])
+
+    def _on_year_range_changed(self, *_) -> None:
         try:
-            w = self._width_var.get()
-        except tk.TclError:
+            y1 = int(self._year_start_var.get())
+            y2 = int(self._year_end_var.get())
+        except (tk.TclError, ValueError):
+            self._range_warn_lbl.config(text="")
             return
-        suggested = suggest_column_mode(w)
-        mode = self._col_mode_var.get()
-        if mode == "auto":
-            self._col_suggest_lbl.config(text=f"\u2192 Will use {suggested} at this width")
-        elif mode == "extended" and w < EXTENDED_MIN_WIDTH_IN:
-            self._col_suggest_lbl.config(
-                text=f"\u26a0 Extended may be crowded below {EXTENDED_MIN_WIDTH_IN}\"")
-        elif mode == "standard" and w < STANDARD_MIN_WIDTH_IN:
-            self._col_suggest_lbl.config(
-                text=f"\u26a0 Standard may be crowded below {STANDARD_MIN_WIDTH_IN}\"")
+        span = y2 - y1 + 1
+        if y1 > y2:
+            self._range_warn_lbl.config(text="\u26a0 Start year must be \u2264 end year")
+        elif span > 10:
+            self._range_warn_lbl.config(
+                text=f"\u26a0 {span} seasons — first fetch may be slow")
         else:
-            self._col_suggest_lbl.config(text="")
+            self._range_warn_lbl.config(text="")
 
     def _pick_bg_color(self) -> None:
         color = colorchooser.askcolor(
@@ -353,72 +360,70 @@ class PitcherTab(ttk.Frame):
                 f"Invalid background color \u201c{color}\u201d \u2014 use #RGB or #RRGGBB",
                 error=True)
             return
+        try:
+            y1 = int(self._year_start_var.get())
+            y2 = int(self._year_end_var.get())
+        except (tk.TclError, ValueError):
+            self._set_status("Invalid year range.", error=True)
+            return
+        if y1 > y2:
+            self._set_status("Start year must be \u2264 end year.", error=True)
+            return
+
         self._fetching = True
         self._fetch_btn.config(state="disabled")
         self._refresh_btn.config(state="disabled")
-        self._set_status("Fetching pitching stats\u2026", error=False)
+        total = y2 - y1 + 1
+        self._set_status(f"Fetching {y1}\u2026 (1/{total})", error=False)
         self._canvas.delete("all")
         self._canvas.create_text(
             THUMB_W // 2, THUMB_H // 2,
             text="Fetching data\u2026", fill="#555555", font=("Arial", 11))
-        threading.Thread(target=self._do_fetch, args=(force,), daemon=True).start()
+        threading.Thread(target=self._do_fetch, args=(y1, y2, total, force),
+                         daemon=True).start()
 
     def _force_refresh(self) -> None:
         self._fetch_and_preview(force=True)
 
-    def _do_fetch(self, force: bool = False) -> None:
+    def _do_fetch(self, y1: int, y2: int, total: int, force: bool) -> None:
+        def progress(season: int, idx: int, tot: int) -> None:
+            self.after(0, lambda: self._set_status(
+                f"Fetching {season}\u2026 ({idx}/{tot})", error=False))
+
         try:
-            block, source = fetch_pitchers_cached(
+            block = fetch_history(
+                scope=self._scope_var.get(),
+                stat_type=self._stat_type_var.get(),
+                sort_stat=self._sort_var.get(),
+                year_start=y1,
+                year_end=y2,
+                min_pa=int(self._minpa_var.get()),
+                min_ip=float(self._minip_var.get()),
+                min_g=int(self._ming_var.get()),
+                pitcher_type=self._pitcher_type_var.get(),
                 ttl_minutes=self.settings.data_cache_ttl_minutes,
                 working_dir=self.settings.working_dir,
                 force_refresh=force,
+                year_sort=self._year_sort_var.get(),
+                progress_cb=progress,
             )
-            self.after(0, lambda: self._do_render(block, source))
+            self.after(0, lambda: self._do_render(block))
         except Exception as exc:
             msg = str(exc)
             self.after(0, lambda m=msg: self._on_fetch_error(m))
 
-    def _do_render(self, block, source: str = "live") -> None:
+    def _do_render(self, block) -> None:
         try:
-            cfg     = self._build_card_config()
-            entries = filter_pitchers(block, cfg.scope, cfg.pitcher_type)
-            trimmed = sort_and_trim(
-                entries, cfg.sort_stat, cfg.top_n,
-                cfg.min_ip, cfg.min_g, cfg.pitcher_type,
-            )
-
-            if not trimmed:
-                qualifier = (
-                    f"\u2265{cfg.min_g} G"
-                    if cfg.pitcher_type == "Relievers"
-                    else f"\u2265{cfg.min_ip} IP"
-                )
-                self._on_fetch_error(
-                    f"No pitchers found for scope '{cfg.scope}' "
-                    f"({cfg.pitcher_type}) with {qualifier}.")
-                return
-
-            renderer = PitchersCardRenderer(cfg, trimmed, block,
-                                            working_dir=self.settings.working_dir)
+            cfg = self._build_card_config()
+            renderer = HistoryCardRenderer(cfg, block,
+                                           working_dir=self.settings.working_dir)
             self._card_image = renderer.render()
             self._update_thumbnail()
-
-            age_sec = (datetime.datetime.now() - block.as_of).total_seconds()
-            if source == "live":
-                status = "Live data \u00b7 fetched just now"
-            else:
-                mins    = int(age_sec // 60)
-                secs    = int(age_sec % 60)
-                age_str = f"{mins}m {secs}s ago" if mins else f"{secs}s ago"
-                label   = "Memory cache" if source == "memory" else "Disk cache"
-                status  = (f"{label} \u00b7 fetched {age_str}  "
-                           f"(TTL {self.settings.data_cache_ttl_minutes} min)")
-            if getattr(renderer, "last_warning", None):
-                self._status_lbl.config(
-                    text=status + f"\n\u26a0 {renderer.last_warning}",
-                    foreground="#cc6600")
-            else:
-                self._set_status(status, error=False)
+            n = len(block.entries)
+            self._set_status(
+                f"Done — {n} season{'s' if n != 1 else ''} "
+                f"({block.year_start}\u2013{block.year_end})",
+                error=False)
             self._full_preview_btn.config(state="normal")
             self._export_png_btn.config(state="normal")
             self._export_jpg_btn.config(state="normal")
@@ -436,38 +441,17 @@ class PitcherTab(ttk.Frame):
         self._draw_placeholder()
         self._set_status(f"Error: {msg}", error=True)
 
-    def _build_card_config(self) -> PitchersCardConfig:
-        try:
-            top_n = int(self._topn_var.get())
-        except (tk.TclError, ValueError):
-            top_n = 10
-        try:
-            min_ip = float(self._minip_var.get())
-        except (tk.TclError, ValueError):
-            min_ip = 30.0
-        try:
-            min_g = int(self._ming_var.get())
-        except (tk.TclError, ValueError):
-            min_g = 10
-        return PitchersCardConfig(
+    def _build_card_config(self) -> HistoryCardConfig:
+        return HistoryCardConfig(
             width_in=self._width_var.get(),
             height_in=self._height_var.get(),
             dpi=self.settings.dpi,
             bg_color=self._bg_var.get(),
             scope=self._scope_var.get(),
-            pitcher_type=self._type_var.get(),
-            column_mode=self._col_mode_var.get(),
+            stat_type=self._stat_type_var.get(),
             sort_stat=self._sort_var.get(),
-            top_n=top_n,
-            min_ip=min_ip,
-            min_g=min_g,
-            show_timestamp=self._show_ts_var.get(),
-            simple_title=self._simple_title_var.get(),
-            show_rank_badges=self._show_badges_var.get(),
-            show_jersey_number=self._show_jersey_var.get(),
             show_logos=self._show_logos_var.get(),
-            show_col_explainers=self._show_explainers_var.get(),
-            col_explainer_sep=self.settings.col_explainer_sep,
+            show_timestamp=self._show_ts_var.get(),
         )
 
     def _update_thumbnail(self) -> None:
@@ -492,7 +476,7 @@ class PitcherTab(ttk.Frame):
         if self._card_image is None:
             return
         win = tk.Toplevel(self)
-        win.title("Pitchers Card \u2014 Full Preview")
+        win.title("Season Leaders History \u2014 Full Preview")
         img   = self._card_image
         max_w = 1200
         ratio = min(1.0, max_w / img.width)
@@ -526,13 +510,13 @@ class PitcherTab(ttk.Frame):
                     return
             else:
                 return
-        output_dir = os.path.join(working_dir, "output", "pitchers")
+        output_dir = os.path.join(working_dir, "output", "history")
         os.makedirs(output_dir, exist_ok=True)
         ext      = ".png" if fmt == "PNG" else ".jpg"
-        raw_name = self._export_name_var.get().strip() or "pitchers_card"
+        raw_name = self._export_name_var.get().strip() or "history_card"
         base     = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", raw_name).strip(". ")
         if not base:
-            base = "pitchers_card"
+            base = "history_card"
         if self._append_ts_var.get():
             ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             base = f"{base}_{ts}"
@@ -549,30 +533,35 @@ class PitcherTab(ttk.Frame):
     # Persist settings
     # ------------------------------------------------------------------
     def apply(self) -> None:
-        self.settings.pitchers_scope          = self._scope_var.get()
-        self.settings.pitchers_pitcher_type   = self._type_var.get()
-        self.settings.pitchers_column_mode    = self._col_mode_var.get()
-        self.settings.pitchers_sort_stat      = self._sort_var.get()
+        self.settings.history_scope        = self._scope_var.get()
+        self.settings.history_stat_type    = self._stat_type_var.get()
+        self.settings.history_sort_stat    = self._sort_var.get()
+        self.settings.history_pitcher_type = self._pitcher_type_var.get()
         try:
-            self.settings.pitchers_top_n      = int(self._topn_var.get())
+            self.settings.history_year_start = int(self._year_start_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.pitchers_min_ip     = float(self._minip_var.get())
+            self.settings.history_year_end   = int(self._year_end_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.pitchers_min_g      = int(self._ming_var.get())
+            self.settings.history_min_pa     = int(self._minpa_var.get())
         except (tk.TclError, ValueError):
             pass
-        self.settings.pitchers_show_timestamp      = self._show_ts_var.get()
-        self.settings.pitchers_simple_title        = self._simple_title_var.get()
-        self.settings.pitchers_show_rank_badges    = self._show_badges_var.get()
-        self.settings.pitchers_show_jersey_number  = self._show_jersey_var.get()
-        self.settings.pitchers_show_logos          = self._show_logos_var.get()
-        self.settings.pitchers_width_in            = self._width_var.get()
-        self.settings.pitchers_height_in           = self._height_var.get()
-        self.settings.pitchers_bg_color            = self._bg_var.get()
-        self.settings.pitchers_export_filename     = self._export_name_var.get().strip()
-        self.settings.pitchers_append_timestamp    = self._append_ts_var.get()
-        self.settings.pitchers_show_col_explainers = self._show_explainers_var.get()
+        try:
+            self.settings.history_min_ip     = float(self._minip_var.get())
+        except (tk.TclError, ValueError):
+            pass
+        try:
+            self.settings.history_min_g      = int(self._ming_var.get())
+        except (tk.TclError, ValueError):
+            pass
+        self.settings.history_show_logos       = self._show_logos_var.get()
+        self.settings.history_show_timestamp   = self._show_ts_var.get()
+        self.settings.history_width_in         = self._width_var.get()
+        self.settings.history_height_in        = self._height_var.get()
+        self.settings.history_bg_color         = self._bg_var.get()
+        self.settings.history_export_filename  = self._export_name_var.get().strip()
+        self.settings.history_append_timestamp = self._append_ts_var.get()
+        self.settings.history_year_sort        = self._year_sort_var.get()

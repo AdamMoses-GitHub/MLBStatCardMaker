@@ -35,6 +35,21 @@ _ESPN_ABBREV_OVERRIDE: dict[str, str] = {
     "ATH": "oak",   # Athletics: API says ATH, ESPN still uses oak
 }
 
+# Pseudo-abbrevs for league/MLB scope logos (not real team codes).
+# ESPN serves AL and NL at the normal teamlogos path; MLB uses the leagues path.
+_LEAGUE_LOGO_URL: dict[str, str] = {
+    "MLB":        "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png",
+    "AL":         "https://a.espncdn.com/i/teamlogos/mlb/500/al.png",
+    "NL":         "https://a.espncdn.com/i/teamlogos/mlb/500/nl.png",
+    # Divisions fall back to their parent league logo
+    "AL EAST":    "https://a.espncdn.com/i/teamlogos/mlb/500/al.png",
+    "AL CENTRAL": "https://a.espncdn.com/i/teamlogos/mlb/500/al.png",
+    "AL WEST":    "https://a.espncdn.com/i/teamlogos/mlb/500/al.png",
+    "NL EAST":    "https://a.espncdn.com/i/teamlogos/mlb/500/nl.png",
+    "NL CENTRAL": "https://a.espncdn.com/i/teamlogos/mlb/500/nl.png",
+    "NL WEST":    "https://a.espncdn.com/i/teamlogos/mlb/500/nl.png",
+}
+
 
 def _cache_path(working_dir: str, abbrev: str) -> str:
     logos_dir = os.path.join(working_dir, "logos")
@@ -63,6 +78,20 @@ def get_logo(abbrev: str, size_px: int, working_dir: str) -> Optional[Image.Imag
                 os.remove(cache)
             except OSError:
                 pass
+
+    # League/scope logos (MLB, AL, NL, divisions) use a fixed URL
+    league_url = _LEAGUE_LOGO_URL.get(abbrev)
+    if league_url:
+        try:
+            resp = requests.get(league_url, timeout=8)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+            img.save(cache, "PNG")
+            img = img.resize((size_px, size_px), Image.LANCZOS)
+            return img
+        except Exception as exc:
+            logger.warning("Could not download league logo for %s: %s", abbrev, exc)
+        return None
 
     # Download from ESPN CDN
     espn_abbrev = _ESPN_ABBREV_OVERRIDE.get(abbrev, abbrev.lower())

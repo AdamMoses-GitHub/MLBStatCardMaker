@@ -10,20 +10,19 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 from PIL import Image, ImageTk
 
 from app.settings import Settings
-from app.cards.pitchers_card import (
-    PitchersCardConfig, PitchersCardRenderer,
-    suggest_column_mode, EXTENDED_MIN_WIDTH_IN, STANDARD_MIN_WIDTH_IN,
-)
-from app.data.pitchers_api import (
-    PITCHER_SCOPE_OPTIONS, PITCHER_TYPE_OPTIONS, SORT_STAT_LABELS,
-    fetch_pitchers_cached, filter_pitchers, sort_and_trim,
+from app.cards.roster_card import RosterCardConfig, RosterCardRenderer
+from app.data.roster_api import (
+    fetch_roster,
+    TEAM_NAME_OPTIONS,
+    TEAM_NAMES,
+    ROSTER_TYPE_OPTIONS,
 )
 
 THUMB_W = 480
 THUMB_H = 320
 
 
-class PitcherTab(ttk.Frame):
+class RosterTab(ttk.Frame):
     def __init__(self, parent: ttk.Notebook, settings: Settings, **kwargs):
         super().__init__(parent, **kwargs)
         self.settings = settings
@@ -55,8 +54,8 @@ class PitcherTab(ttk.Frame):
         size_frame = ttk.LabelFrame(parent, text="Card Size")
         size_frame.pack(fill="x", padx=8, pady=(8, 4))
 
-        self._width_var  = tk.DoubleVar(value=self.settings.pitchers_width_in)
-        self._height_var = tk.DoubleVar(value=self.settings.pitchers_height_in)
+        self._width_var  = tk.DoubleVar(value=self.settings.roster_width_in)
+        self._height_var = tk.DoubleVar(value=self.settings.roster_height_in)
 
         row = ttk.Frame(size_frame)
         row.pack(anchor="w", **pad)
@@ -80,130 +79,68 @@ class PitcherTab(ttk.Frame):
         self._orient_lbl.pack(anchor="w", padx=8, pady=(0, 4))
         self._update_orientation_label()
 
-        # ---- Scope ----
-        scope_frame = ttk.LabelFrame(parent, text="Scope")
-        scope_frame.pack(fill="x", padx=8, pady=4)
+        # ---- Team ----
+        team_frame = ttk.LabelFrame(parent, text="Team")
+        team_frame.pack(fill="x", padx=8, pady=4)
 
-        self._scope_var = tk.StringVar(value=self.settings.pitchers_scope)
-        ttk.Combobox(scope_frame, textvariable=self._scope_var,
-                     values=PITCHER_SCOPE_OPTIONS, state="readonly", width=20).pack(
+        self._team_var = tk.StringVar(value=self.settings.roster_team)
+        ttk.Combobox(team_frame, textvariable=self._team_var,
+                     values=TEAM_NAME_OPTIONS, state="readonly", width=26).pack(
             anchor="w", **pad)
 
-        # ---- Pitcher Type ----
-        type_frame = ttk.LabelFrame(parent, text="Pitcher Type")
+        # ---- Roster Type ----
+        type_frame = ttk.LabelFrame(parent, text="Roster Type")
         type_frame.pack(fill="x", padx=8, pady=4)
 
-        self._type_var = tk.StringVar(value=self.settings.pitchers_pitcher_type)
-        for val in PITCHER_TYPE_OPTIONS:
-            ttk.Radiobutton(type_frame, text=val, variable=self._type_var,
-                            value=val, command=self._on_type_changed).pack(
-                anchor="w", padx=8, pady=1)
-
-        # ---- Query Options ----
-        query_frame = ttk.LabelFrame(parent, text="Query Options")
-        query_frame.pack(fill="x", padx=8, pady=4)
-
-        sort_row = ttk.Frame(query_frame)
-        sort_row.pack(anchor="w", **pad)
-        ttk.Label(sort_row, text="Sort by:").pack(side="left")
-        self._sort_var = tk.StringVar(value=self.settings.pitchers_sort_stat)
-        ttk.Combobox(sort_row, textvariable=self._sort_var,
-                     values=SORT_STAT_LABELS, state="readonly", width=7).pack(
-            side="left", padx=4)
-
-        topn_row = ttk.Frame(query_frame)
-        topn_row.pack(anchor="w", **pad)
-        ttk.Label(topn_row, text="Top N:").pack(side="left")
-        self._topn_var = tk.IntVar(value=self.settings.pitchers_top_n)
-        ttk.Spinbox(topn_row, from_=1, to=50, textvariable=self._topn_var,
-                    width=5).pack(side="left", padx=4)
-
-        # Min IP (shown for All / Starters)
-        self._minip_row = ttk.Frame(query_frame)
-        self._minip_row.pack(anchor="w", padx=8, pady=(0, 0))
-        ttk.Label(self._minip_row, text="Min IP:").pack(side="left")
-        self._minip_var = tk.DoubleVar(value=self.settings.pitchers_min_ip)
-        ttk.Spinbox(self._minip_row, from_=0.0, to=300.0, increment=5.0,
-                    textvariable=self._minip_var, width=6).pack(side="left", padx=4)
-
-        # Min G (shown for Relievers)
-        self._ming_row = ttk.Frame(query_frame)
-        # packed/unpacked dynamically by _on_type_changed
-        ttk.Label(self._ming_row, text="Min G:").pack(side="left")
-        self._ming_var = tk.IntVar(value=self.settings.pitchers_min_g)
-        ttk.Spinbox(self._ming_row, from_=0, to=162, textvariable=self._ming_var,
-                    width=5).pack(side="left", padx=4)
-
-        # Spacer to keep frame height consistent
-        self._query_spacer = ttk.Label(query_frame, text="")
-        self._query_spacer.pack(pady=(0, 2))
-
-        self._on_type_changed()   # set initial qualifier visibility
-
-        # ---- Columns ----
-        col_frame = ttk.LabelFrame(parent, text="Columns")
-        col_frame.pack(fill="x", padx=8, pady=4)
-
-        self._col_mode_var = tk.StringVar(value=self.settings.pitchers_column_mode)
-        for val, label in [
-                ("auto",     "Auto (suggested)"),
-                ("reduced",  "Reduced  (ERA W L SO WHIP)"),
-                ("standard", "Standard  (ERA W L IP SO BB WHIP)"),
-                ("extended", "Extended  (+SV HLD HR)"),
-        ]:
-            ttk.Radiobutton(col_frame, text=label, variable=self._col_mode_var,
-                            value=val, command=self._update_col_suggestion).pack(
-                anchor="w", padx=8, pady=1)
-
-        self._col_suggest_lbl = ttk.Label(col_frame, text="", foreground="#2255aa")
-        self._col_suggest_lbl.pack(anchor="w", padx=12, pady=(0, 4))
-        self._update_col_suggestion()
+        self._roster_type_var = tk.StringVar(value=self.settings.roster_type)
+        for val in ROSTER_TYPE_OPTIONS:
+            ttk.Radiobutton(type_frame, text=val, variable=self._roster_type_var,
+                            value=val).pack(anchor="w", padx=8, pady=1)
 
         # ---- Display Options ----
         opt_frame = ttk.LabelFrame(parent, text="Display Options")
         opt_frame.pack(fill="x", padx=8, pady=4)
 
-        self._show_ts_var = tk.BooleanVar(value=self.settings.pitchers_show_timestamp)
-        ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
-                        variable=self._show_ts_var).pack(
+        self._group_var = tk.BooleanVar(value=self.settings.roster_group_by_position)
+        ttk.Checkbutton(opt_frame, text="Group by position",
+                        variable=self._group_var).pack(
             anchor="w", padx=8, pady=(4, 2))
 
-        self._simple_title_var = tk.BooleanVar(value=self.settings.pitchers_simple_title)
-        ttk.Checkbutton(opt_frame, text="Simple title ('Top Pitchers')",
-                        variable=self._simple_title_var).pack(
-            anchor="w", padx=8, pady=2)
+        self._jersey_var = tk.BooleanVar(value=self.settings.roster_show_jersey_number)
+        ttk.Checkbutton(opt_frame, text="Show jersey #",
+                        variable=self._jersey_var).pack(
+            anchor="w", padx=8, pady=1)
 
-        self._show_badges_var = tk.BooleanVar(value=self.settings.pitchers_show_rank_badges)
-        ttk.Checkbutton(opt_frame, text="Show rank badges (gold / silver / copper)",
-                        variable=self._show_badges_var).pack(
-            anchor="w", padx=8, pady=2)
+        self._bt_var = tk.BooleanVar(value=self.settings.roster_show_bats_throws)
+        ttk.Checkbutton(opt_frame, text="Show Bats/Throws",
+                        variable=self._bt_var).pack(
+            anchor="w", padx=8, pady=1)
 
-        self._show_jersey_var = tk.BooleanVar(value=self.settings.pitchers_show_jersey_number)
-        ttk.Checkbutton(opt_frame, text="Show jersey number inline",
-                        variable=self._show_jersey_var).pack(
-            anchor="w", padx=8, pady=2)
+        self._age_var = tk.BooleanVar(value=self.settings.roster_show_age)
+        ttk.Checkbutton(opt_frame, text="Show Age",
+                        variable=self._age_var).pack(
+            anchor="w", padx=8, pady=1)
 
-        self._show_logos_var = tk.BooleanVar(value=self.settings.pitchers_show_logos)
-        ttk.Checkbutton(opt_frame, text="Show team logos",
-                        variable=self._show_logos_var).pack(
-            anchor="w", padx=8, pady=2)
+        self._logos_var = tk.BooleanVar(value=self.settings.roster_show_logos)
+        ttk.Checkbutton(opt_frame, text="Show team logo in title",
+                        variable=self._logos_var).pack(
+            anchor="w", padx=8, pady=1)
 
-        self._show_explainers_var = tk.BooleanVar(
-            value=self.settings.pitchers_show_col_explainers)
-        ttk.Checkbutton(opt_frame, text="Show column explainers",
-                        variable=self._show_explainers_var).pack(
-            anchor="w", padx=8, pady=(0, 4))
+        self._ts_var = tk.BooleanVar(value=self.settings.roster_show_timestamp)
+        ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
+                        variable=self._ts_var).pack(
+            anchor="w", padx=8, pady=(1, 4))
 
         # ---- Background Color ----
         bg_frame = ttk.LabelFrame(parent, text="Background Color")
         bg_frame.pack(fill="x", padx=8, pady=4)
 
-        self._bg_var = tk.StringVar(value=self.settings.pitchers_bg_color)
+        self._bg_var = tk.StringVar(value=self.settings.roster_bg_color)
         bg_row = ttk.Frame(bg_frame)
         bg_row.pack(anchor="w", **pad)
         ttk.Entry(bg_row, textvariable=self._bg_var, width=9).pack(side="left")
         self._bg_swatch = tk.Label(bg_row, width=3, relief="sunken",
-                                   background=self.settings.pitchers_bg_color)
+                                   background=self.settings.roster_bg_color)
         self._bg_swatch.pack(side="left", padx=3)
         ttk.Button(bg_row, text="Pick\u2026", command=self._pick_bg_color).pack(side="left")
         self._bg_var.trace_add("write", self._on_bg_changed)
@@ -233,13 +170,13 @@ class PitcherTab(ttk.Frame):
         export_frame = ttk.LabelFrame(parent, text="Export")
         export_frame.pack(fill="x", padx=8, pady=(4, 8))
 
-        self._export_name_var = tk.StringVar(value=self.settings.pitchers_export_filename)
+        self._export_name_var = tk.StringVar(value=self.settings.roster_export_filename)
         ttk.Label(export_frame, text="Filename (no extension):").pack(
             anchor="w", padx=8, pady=(4, 0))
         ttk.Entry(export_frame, textvariable=self._export_name_var, width=24).pack(
             fill="x", padx=8, pady=2)
 
-        self._append_ts_var = tk.BooleanVar(value=self.settings.pitchers_append_timestamp)
+        self._append_ts_var = tk.BooleanVar(value=self.settings.roster_append_timestamp)
         ttk.Checkbutton(export_frame, text="Append timestamp to filename",
                         variable=self._append_ts_var).pack(
             anchor="w", padx=8, pady=(0, 4))
@@ -276,37 +213,6 @@ class PitcherTab(ttk.Frame):
 
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
-        self._update_col_suggestion()
-
-    def _on_type_changed(self, *_) -> None:
-        """Swap Min IP / Min G qualifier row based on selected pitcher type."""
-        ptype = self._type_var.get()
-        if ptype == "Relievers":
-            self._minip_row.pack_forget()
-            self._ming_row.pack(anchor="w", padx=8, pady=(0, 0),
-                                before=self._query_spacer)
-        else:
-            self._ming_row.pack_forget()
-            self._minip_row.pack(anchor="w", padx=8, pady=(0, 0),
-                                 before=self._query_spacer)
-
-    def _update_col_suggestion(self) -> None:
-        try:
-            w = self._width_var.get()
-        except tk.TclError:
-            return
-        suggested = suggest_column_mode(w)
-        mode = self._col_mode_var.get()
-        if mode == "auto":
-            self._col_suggest_lbl.config(text=f"\u2192 Will use {suggested} at this width")
-        elif mode == "extended" and w < EXTENDED_MIN_WIDTH_IN:
-            self._col_suggest_lbl.config(
-                text=f"\u26a0 Extended may be crowded below {EXTENDED_MIN_WIDTH_IN}\"")
-        elif mode == "standard" and w < STANDARD_MIN_WIDTH_IN:
-            self._col_suggest_lbl.config(
-                text=f"\u26a0 Standard may be crowded below {STANDARD_MIN_WIDTH_IN}\"")
-        else:
-            self._col_suggest_lbl.config(text="")
 
     def _pick_bg_color(self) -> None:
         color = colorchooser.askcolor(
@@ -356,7 +262,8 @@ class PitcherTab(ttk.Frame):
         self._fetching = True
         self._fetch_btn.config(state="disabled")
         self._refresh_btn.config(state="disabled")
-        self._set_status("Fetching pitching stats\u2026", error=False)
+        team_name = self._team_var.get()
+        self._set_status(f"Fetching {team_name} roster\u2026", error=False)
         self._canvas.delete("all")
         self._canvas.create_text(
             THUMB_W // 2, THUMB_H // 2,
@@ -366,59 +273,33 @@ class PitcherTab(ttk.Frame):
     def _force_refresh(self) -> None:
         self._fetch_and_preview(force=True)
 
-    def _do_fetch(self, force: bool = False) -> None:
+    def _do_fetch(self, force: bool) -> None:
+        team_name = self._team_var.get()
+        abbrev    = TEAM_NAMES.get(team_name, team_name)
         try:
-            block, source = fetch_pitchers_cached(
+            block = fetch_roster(
+                team_abbrev=abbrev,
+                roster_type=self._roster_type_var.get(),
                 ttl_minutes=self.settings.data_cache_ttl_minutes,
                 working_dir=self.settings.working_dir,
                 force_refresh=force,
             )
-            self.after(0, lambda: self._do_render(block, source))
+            self.after(0, lambda: self._do_render(block))
         except Exception as exc:
             msg = str(exc)
             self.after(0, lambda m=msg: self._on_fetch_error(m))
 
-    def _do_render(self, block, source: str = "live") -> None:
+    def _do_render(self, block) -> None:
         try:
-            cfg     = self._build_card_config()
-            entries = filter_pitchers(block, cfg.scope, cfg.pitcher_type)
-            trimmed = sort_and_trim(
-                entries, cfg.sort_stat, cfg.top_n,
-                cfg.min_ip, cfg.min_g, cfg.pitcher_type,
-            )
-
-            if not trimmed:
-                qualifier = (
-                    f"\u2265{cfg.min_g} G"
-                    if cfg.pitcher_type == "Relievers"
-                    else f"\u2265{cfg.min_ip} IP"
-                )
-                self._on_fetch_error(
-                    f"No pitchers found for scope '{cfg.scope}' "
-                    f"({cfg.pitcher_type}) with {qualifier}.")
-                return
-
-            renderer = PitchersCardRenderer(cfg, trimmed, block,
-                                            working_dir=self.settings.working_dir)
+            cfg = self._build_card_config()
+            renderer = RosterCardRenderer(cfg, block,
+                                          working_dir=self.settings.working_dir)
             self._card_image = renderer.render()
             self._update_thumbnail()
-
-            age_sec = (datetime.datetime.now() - block.as_of).total_seconds()
-            if source == "live":
-                status = "Live data \u00b7 fetched just now"
-            else:
-                mins    = int(age_sec // 60)
-                secs    = int(age_sec % 60)
-                age_str = f"{mins}m {secs}s ago" if mins else f"{secs}s ago"
-                label   = "Memory cache" if source == "memory" else "Disk cache"
-                status  = (f"{label} \u00b7 fetched {age_str}  "
-                           f"(TTL {self.settings.data_cache_ttl_minutes} min)")
-            if getattr(renderer, "last_warning", None):
-                self._status_lbl.config(
-                    text=status + f"\n\u26a0 {renderer.last_warning}",
-                    foreground="#cc6600")
-            else:
-                self._set_status(status, error=False)
+            n = len(block.entries)
+            self._set_status(
+                f"Done \u2014 {n} player{'s' if n != 1 else ''} ({block.roster_type})",
+                error=False)
             self._full_preview_btn.config(state="normal")
             self._export_png_btn.config(state="normal")
             self._export_jpg_btn.config(state="normal")
@@ -436,38 +317,22 @@ class PitcherTab(ttk.Frame):
         self._draw_placeholder()
         self._set_status(f"Error: {msg}", error=True)
 
-    def _build_card_config(self) -> PitchersCardConfig:
-        try:
-            top_n = int(self._topn_var.get())
-        except (tk.TclError, ValueError):
-            top_n = 10
-        try:
-            min_ip = float(self._minip_var.get())
-        except (tk.TclError, ValueError):
-            min_ip = 30.0
-        try:
-            min_g = int(self._ming_var.get())
-        except (tk.TclError, ValueError):
-            min_g = 10
-        return PitchersCardConfig(
+    def _build_card_config(self) -> RosterCardConfig:
+        team_name = self._team_var.get()
+        abbrev    = TEAM_NAMES.get(team_name, team_name)
+        return RosterCardConfig(
             width_in=self._width_var.get(),
             height_in=self._height_var.get(),
             dpi=self.settings.dpi,
             bg_color=self._bg_var.get(),
-            scope=self._scope_var.get(),
-            pitcher_type=self._type_var.get(),
-            column_mode=self._col_mode_var.get(),
-            sort_stat=self._sort_var.get(),
-            top_n=top_n,
-            min_ip=min_ip,
-            min_g=min_g,
-            show_timestamp=self._show_ts_var.get(),
-            simple_title=self._simple_title_var.get(),
-            show_rank_badges=self._show_badges_var.get(),
-            show_jersey_number=self._show_jersey_var.get(),
-            show_logos=self._show_logos_var.get(),
-            show_col_explainers=self._show_explainers_var.get(),
-            col_explainer_sep=self.settings.col_explainer_sep,
+            team_abbrev=abbrev,
+            roster_type=self._roster_type_var.get(),
+            group_by_position=self._group_var.get(),
+            show_jersey_number=self._jersey_var.get(),
+            show_bats_throws=self._bt_var.get(),
+            show_age=self._age_var.get(),
+            show_logos=self._logos_var.get(),
+            show_timestamp=self._ts_var.get(),
         )
 
     def _update_thumbnail(self) -> None:
@@ -492,7 +357,7 @@ class PitcherTab(ttk.Frame):
         if self._card_image is None:
             return
         win = tk.Toplevel(self)
-        win.title("Pitchers Card \u2014 Full Preview")
+        win.title("Team Roster \u2014 Full Preview")
         img   = self._card_image
         max_w = 1200
         ratio = min(1.0, max_w / img.width)
@@ -526,13 +391,13 @@ class PitcherTab(ttk.Frame):
                     return
             else:
                 return
-        output_dir = os.path.join(working_dir, "output", "pitchers")
+        output_dir = os.path.join(working_dir, "output", "roster")
         os.makedirs(output_dir, exist_ok=True)
         ext      = ".png" if fmt == "PNG" else ".jpg"
-        raw_name = self._export_name_var.get().strip() or "pitchers_card"
+        raw_name = self._export_name_var.get().strip() or "roster_card"
         base     = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", raw_name).strip(". ")
         if not base:
-            base = "pitchers_card"
+            base = "roster_card"
         if self._append_ts_var.get():
             ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             base = f"{base}_{ts}"
@@ -549,30 +414,16 @@ class PitcherTab(ttk.Frame):
     # Persist settings
     # ------------------------------------------------------------------
     def apply(self) -> None:
-        self.settings.pitchers_scope          = self._scope_var.get()
-        self.settings.pitchers_pitcher_type   = self._type_var.get()
-        self.settings.pitchers_column_mode    = self._col_mode_var.get()
-        self.settings.pitchers_sort_stat      = self._sort_var.get()
-        try:
-            self.settings.pitchers_top_n      = int(self._topn_var.get())
-        except (tk.TclError, ValueError):
-            pass
-        try:
-            self.settings.pitchers_min_ip     = float(self._minip_var.get())
-        except (tk.TclError, ValueError):
-            pass
-        try:
-            self.settings.pitchers_min_g      = int(self._ming_var.get())
-        except (tk.TclError, ValueError):
-            pass
-        self.settings.pitchers_show_timestamp      = self._show_ts_var.get()
-        self.settings.pitchers_simple_title        = self._simple_title_var.get()
-        self.settings.pitchers_show_rank_badges    = self._show_badges_var.get()
-        self.settings.pitchers_show_jersey_number  = self._show_jersey_var.get()
-        self.settings.pitchers_show_logos          = self._show_logos_var.get()
-        self.settings.pitchers_width_in            = self._width_var.get()
-        self.settings.pitchers_height_in           = self._height_var.get()
-        self.settings.pitchers_bg_color            = self._bg_var.get()
-        self.settings.pitchers_export_filename     = self._export_name_var.get().strip()
-        self.settings.pitchers_append_timestamp    = self._append_ts_var.get()
-        self.settings.pitchers_show_col_explainers = self._show_explainers_var.get()
+        self.settings.roster_team              = self._team_var.get()
+        self.settings.roster_type              = self._roster_type_var.get()
+        self.settings.roster_group_by_position = self._group_var.get()
+        self.settings.roster_show_jersey_number = self._jersey_var.get()
+        self.settings.roster_show_bats_throws  = self._bt_var.get()
+        self.settings.roster_show_age          = self._age_var.get()
+        self.settings.roster_show_logos        = self._logos_var.get()
+        self.settings.roster_show_timestamp    = self._ts_var.get()
+        self.settings.roster_width_in          = self._width_var.get()
+        self.settings.roster_height_in         = self._height_var.get()
+        self.settings.roster_bg_color          = self._bg_var.get()
+        self.settings.roster_export_filename   = self._export_name_var.get().strip()
+        self.settings.roster_append_timestamp  = self._append_ts_var.get()

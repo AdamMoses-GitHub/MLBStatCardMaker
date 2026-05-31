@@ -143,7 +143,7 @@ class BatterTab(ttk.Frame):
             anchor="w", padx=8, pady=(4, 2))
 
         self._simple_title_var = tk.BooleanVar(value=self.settings.batters_simple_title)
-        ttk.Checkbutton(opt_frame, text="Simple title ('Best Batters')",
+        ttk.Checkbutton(opt_frame, text="Simple title ('Top Batters')",
                          variable=self._simple_title_var).pack(
             anchor="w", padx=8, pady=2)
 
@@ -339,7 +339,8 @@ class BatterTab(ttk.Frame):
             )
             self.after(0, lambda: self._do_render(block, source))
         except Exception as exc:
-            self.after(0, lambda: self._on_fetch_error(str(exc)))
+            msg = str(exc)
+            self.after(0, lambda m=msg: self._on_fetch_error(m))
 
     def _do_render(self, block, source: str = "live") -> None:
         import datetime
@@ -476,7 +477,8 @@ class BatterTab(ttk.Frame):
                     return
             else:
                 return
-        os.makedirs(working_dir, exist_ok=True)
+        output_dir = os.path.join(working_dir, "output", "batters")
+        os.makedirs(output_dir, exist_ok=True)
         ext = ".png" if fmt == "PNG" else ".jpg"
         raw_name = self._export_name_var.get().strip() or "batters_card"
         base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", raw_name).strip(". ")
@@ -487,7 +489,7 @@ class BatterTab(ttk.Frame):
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             base = f"{base}_{ts}"
         filename = base + ext
-        out_path = os.path.join(working_dir, filename)
+        out_path = os.path.join(output_dir, filename)
         try:
             cfg = self._build_card_config()
             saved = cfg.export(self._card_image, out_path, fmt)
