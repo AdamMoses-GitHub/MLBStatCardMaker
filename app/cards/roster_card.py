@@ -71,6 +71,13 @@ _GROUP_BG_COLORS: list[str] = [
 ]
 _GROUP_FG = "#1A2B3C"
 
+# Short explanatory subtitle for each roster type (rendered below the title)
+_ROSTER_TYPE_SUBTITLE: dict[str, str] = {
+    "Active 26-Man": "Active 26-Man  ·  players eligible to play today",
+    "40-Man":        "40-Man  ·  full roster including IL & optioned players",
+    "Main Starters": "Main Starters  ·  projected starting lineup",
+}
+
 
 def _pt_px(pt: float, dpi: int) -> int:
     return max(1, round(pt * dpi / 72))
@@ -144,6 +151,7 @@ class RosterCardRenderer:
             _exclude.add("DH")
         if _exclude:
             entries = [e for e in entries if e.position_group not in _exclude]
+        self.rendered_count = len(entries)
         img     = cfg.new_canvas()
         draw    = ImageDraw.Draw(img)
 
@@ -156,9 +164,9 @@ class RosterCardRenderer:
         # Estimate row count (entries + group headers if grouped)
         num_rows = len(entries)
         if cfg.group_by_position:
-            num_rows += len(self._groups_present())
+            num_rows += len(self._groups_present(entries))
 
-        title_h      = max(24, round(H * 0.07))
+        title_h      = max(38, round(H * 0.105))
         col_header_h = max(16, round(H * 0.055))
         footer_h     = max(12, round(H * 0.04)) if cfg.show_timestamp else 0
         _expl_font_sz = max(7, _pt_px(6, cfg.dpi))
@@ -177,8 +185,11 @@ class RosterCardRenderer:
         available_h  = H - title_h - col_header_h - footer_h - explainer_h - PAD
         row_h        = max(12, available_h // max(num_rows, 1))
 
-        title_font_size  = min(max(10, round(title_h * 0.52)),      _pt_px(18, cfg.dpi))
-        header_font_size = min(max(8,  round(col_header_h * 0.52)), _pt_px(10, cfg.dpi))
+        _title_zone_h    = round(title_h * 0.60)   # top zone: team name
+        _sub_zone_h      = title_h - _title_zone_h    # bottom zone: roster type
+        title_font_size  = min(max(10, round(_title_zone_h * 0.52)), _pt_px(18, cfg.dpi))
+        sub_font_size    = min(max(7,  round(_sub_zone_h   * 0.55)), _pt_px(9,  cfg.dpi))
+        header_font_size = min(max(8,  round(col_header_h  * 0.52)), _pt_px(10, cfg.dpi))
         row_font_size    = min(max(7,  round(row_h * 0.50)),        _pt_px(10, cfg.dpi))
         group_font_size  = max(6, round(row_h * 0.46))
         footer_font_size = (
@@ -187,6 +198,7 @@ class RosterCardRenderer:
         )
 
         title_font  = get_font(title_font_size,  bold=True)
+        sub_font    = get_font(sub_font_size)
         header_font = get_font(header_font_size, bold=True, condensed=True)
         row_font    = get_font(row_font_size,     condensed=True)
         group_font  = get_font(group_font_size,   bold=True, condensed=True)
@@ -199,9 +211,11 @@ class RosterCardRenderer:
         y = 0
 
         # --- Title bar ---
-        _tlogo_sz = title_h - 8
+        _tlogo_sz = _title_zone_h - 6
         draw.rectangle([0, 0, W, title_h], fill=cfg.title_bg)
         title_text = f"{self.block.team_name} Roster"
+        sub_text   = _ROSTER_TYPE_SUBTITLE.get(
+            self.block.roster_type, self.block.roster_type)
         if cfg.show_logos:
             tlogo = get_logo(cfg.team_abbrev, _tlogo_sz, self.working_dir)
         else:
@@ -213,15 +227,18 @@ class RosterCardRenderer:
             text_w = tbbox[2] - tbbox[0]
             group_w = _tlogo_sz + gap + text_w
             group_x = max(PAD, (W - group_w) // 2)
-            ly = (title_h - _tlogo_sz) // 2
+            ly = (_title_zone_h - _tlogo_sz) // 2
             img.paste(tlogo, (group_x, ly), tlogo)
             th = tbbox[3] - tbbox[1]
             tx = group_x + _tlogo_sz + gap
-            ty = (title_h - th) // 2 - tbbox[1]
+            ty = (_title_zone_h - th) // 2 - tbbox[1]
             draw.text((tx, ty), title_text, font=title_font, fill=cfg.title_fg)
         else:
             self._draw_centered_text_in_range(
-                draw, title_text, PAD, W, 0, title_h, title_font, cfg.title_fg)
+                draw, title_text, PAD, W, 0, _title_zone_h, title_font, cfg.title_fg)
+        # Subtitle: roster type explanation in the lower portion of the title bar
+        self._draw_centered_text_in_range(
+            draw, sub_text, PAD, W, _title_zone_h, title_h, sub_font, cfg.title_fg)
         y += title_h
 
         # --- Column header row ---
@@ -248,7 +265,8 @@ class RosterCardRenderer:
                 draw, img, entries, cols, col_widths,
                 y, row_h, logo_sz,
                 row_font, group_font,
-                W, PAD, cfg
+                W, PAD, cfg,
+                groups_present=self._groups_present(entries)
             )
         else:
             self._render_flat(
@@ -313,8 +331,9 @@ class RosterCardRenderer:
 
     def _render_grouped(self, draw, img, entries, cols, col_widths,
                         y_start, row_h, logo_sz, row_font, group_font,
-                        W, PAD, cfg):
-        groups_present = self._groups_present()
+                        W, PAD, cfg, groups_present=None):
+        if groups_present is None:
+            groups_present = self._groups_present(entries)
         group_bg_cycle = {g: _GROUP_BG_COLORS[i % len(_GROUP_BG_COLORS)]
                           for i, g in enumerate(groups_present)}
 
@@ -411,8 +430,9 @@ class RosterCardRenderer:
             cols.append("AGE")
         return cols
 
-    def _groups_present(self) -> list[str]:
-        seen = {e.position_group for e in self.block.entries}
+    def _groups_present(self, entries=None) -> list[str]:
+        src = entries if entries is not None else self.block.entries
+        seen = {e.position_group for e in src}
         return [g for g in POSITION_GROUPS if g in seen]
 
     # ------------------------------------------------------------------

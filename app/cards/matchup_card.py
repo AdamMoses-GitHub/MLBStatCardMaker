@@ -28,21 +28,6 @@ def _pt_px(pt: float, dpi: int) -> int:
     return max(1, round(pt * dpi / 72))
 
 
-def _hex_blend(color: str, alpha: float, bg: str = "#FFFFFF") -> str:
-    """Blend a hex color over white at the given alpha (0–1)."""
-    def _parse(h: str) -> tuple[int, int, int]:
-        h = h.lstrip("#")
-        if len(h) == 3:
-            h = h[0]*2 + h[1]*2 + h[2]*2
-        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    fr, fg, fb = _parse(color)
-    br, bg_g, bb = _parse(bg)
-    r = round(fr * alpha + br * (1 - alpha))
-    g = round(fg * alpha + bg_g * (1 - alpha))
-    b = round(fb * alpha + bb * (1 - alpha))
-    return f"#{r:02X}{g:02X}{b:02X}"
-
-
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------

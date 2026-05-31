@@ -58,9 +58,11 @@ class CardConfig:
 
         # Ensure correct extension
         base, ext = os.path.splitext(path)
-        expected_ext = ".jpg" if fmt == "JPEG" else ".png"
-        if ext.lower() not in (expected_ext, ".jpeg"):
-            path = base + expected_ext
+        if fmt == "JPEG":
+            if ext.lower() not in (".jpg", ".jpeg"):
+                path = base + ".jpg"
+        elif ext.lower() != ".png":
+            path = base + ".png"
 
         save_image.save(path, format=fmt, dpi=(self.dpi, self.dpi), quality=95)
         return path

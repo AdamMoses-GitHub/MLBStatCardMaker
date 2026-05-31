@@ -181,8 +181,12 @@ class SettingsTab(ttk.Frame):
 
     def _clear_mem_cache(self) -> None:
         from app.data.mlb_api import clear_standings_cache
+        from app.data.batters_api import clear_batters_cache
+        from app.data.pitchers_api import clear_pitchers_cache
         clear_standings_cache()
-        tk.messagebox.showinfo("Cache Cleared", "In-memory standings cache cleared.")
+        clear_batters_cache()
+        clear_pitchers_cache()
+        tk.messagebox.showinfo("Cache Cleared", "In-memory cache cleared.")
 
     # ------------------------------------------------------------------
     def apply(self) -> None:

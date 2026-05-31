@@ -312,7 +312,7 @@ class RosterTab(ttk.Frame):
                                           working_dir=self.settings.working_dir)
             self._card_image = renderer.render()
             self._update_thumbnail()
-            n = len(block.entries)
+            n = getattr(renderer, 'rendered_count', len(block.entries))
             self._set_status(
                 f"Done \u2014 {n} player{'s' if n != 1 else ''} ({block.roster_type})",
                 error=False)

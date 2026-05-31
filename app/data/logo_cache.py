@@ -10,8 +10,7 @@ from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
-# MLB static CDN team logo URL (PNG, various sizes available)
-_LOGO_URL_TEMPLATE = "https://www.mlbstatic.com/team-logos/{team_id}.svg"
+# MLB static CDN team logo URL (PNG, fallback only)
 _LOGO_PNG_TEMPLATE = "https://content.mlb.com/images/teams/logos/small/{team_id}.png"
 
 # Fallback: ESPN CDN (uses team abbrev)
