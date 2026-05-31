@@ -65,6 +65,14 @@ _STAT_EXPAND: dict[str, str] = {
     "L":    "Losses",
 }
 
+# Column explainer full names (used when show_col_explainers=True)
+_COL_EXPLAINERS: dict[str, str] = {
+    "YEAR":  "Season",
+    "PLAYER": "Player Name",
+    "TEAM":  "Team",
+    # stat columns get their label from the actual stat name dynamically
+}
+
 # Relative weight ratios (columns built dynamically at render time)
 _COL_WEIGHTS: dict[str, float] = {
     "YEAR":   0.9,
@@ -110,6 +118,8 @@ class HistoryCardConfig(CardConfig):
     sort_stat: str = "OPS"
     show_logos: bool = True
     show_timestamp: bool = False
+    show_col_explainers: bool = False
+    col_explainer_sep: str = "="
     title_override: str = ""
 
     # Colors
@@ -161,7 +171,10 @@ class HistoryCardRenderer:
         title_h      = max(24, round(H * 0.07))
         col_header_h = max(16, round(H * 0.055))
         footer_h     = max(12, round(H * 0.04)) if cfg.show_timestamp else 0
-        available_h  = H - title_h - col_header_h - footer_h - PAD
+        _expl_font_sz = max(7, _pt_px(6, cfg.dpi))
+        _expl_line_h  = max(8, round(_expl_font_sz * 1.6))
+        explainer_h   = (_expl_line_h * 2 + 6) if cfg.show_col_explainers else 0
+        available_h  = H - title_h - col_header_h - footer_h - explainer_h - PAD
         row_h        = max(14, available_h // num_rows)
 
         title_font_size  = min(max(10, round(title_h * 0.52)),      _pt_px(18, cfg.dpi))
@@ -300,6 +313,61 @@ class HistoryCardRenderer:
             draw.rectangle([0, H - footer_h, W, H], fill=cfg.bg_color)
             self._draw_centered_text(draw, ts, H - footer_h, footer_h,
                                      footer_font, cfg.footer_color, W)
+
+        # --- Column explainers ---
+        if cfg.show_col_explainers and explainer_h > 0:
+            expl_font = get_font(_expl_font_sz)
+            sep   = cfg.col_explainer_sep
+            items: list[str] = []
+            for col in cols:
+                if col == "YEAR":
+                    items.append(f"YEAR{sep}Season")
+                elif col == "PLAYER":
+                    items.append(f"PLAYER{sep}Player Name")
+                elif col == "TEAM":
+                    items.append(f"TEAM{sep}Team")
+                elif col == "STAT":
+                    long = _STAT_EXPAND.get(cfg.sort_stat, cfg.sort_stat)
+                    items.append(f"{cfg.sort_stat}{sep}{long}")
+                elif col == "EXTRA1" and entries and entries[0].extra_stat_1_label:
+                    lbl  = entries[0].extra_stat_1_label
+                    long = _STAT_EXPAND.get(lbl, lbl)
+                    items.append(f"{lbl}{sep}{long}")
+                elif col == "EXTRA2" and entries and entries[0].extra_stat_2_label:
+                    lbl  = entries[0].extra_stat_2_label
+                    long = _STAT_EXPAND.get(lbl, lbl)
+                    items.append(f"{lbl}{sep}{long}")
+            dot = "  \u00b7  "
+            zone_top = H - footer_h - explainer_h
+            draw.rectangle([0, zone_top, W, zone_top + explainer_h], fill=cfg.bg_color)
+            draw.line([PAD, zone_top + 1, W - PAD, zone_top + 1], fill=cfg.divider_color)
+            inner_top = zone_top + 4
+            inner_h   = explainer_h - 4
+            avail_w   = W - PAD * 2
+            full_text = dot.join(items)
+            bbox0 = expl_font.getbbox(full_text)
+            tw = bbox0[2] - bbox0[0]
+            if tw <= avail_w:
+                th = bbox0[3] - bbox0[1]
+                tx = (W - tw) // 2
+                ty = inner_top + (inner_h - th) // 2 - bbox0[1]
+                draw.text((tx, ty), full_text, font=expl_font, fill=cfg.footer_color)
+            else:
+                mid = max(1, len(items) // 2)
+                lines = [dot.join(items[:mid]), dot.join(items[mid:])]
+                for i, line_text in enumerate(lines):
+                    lbbox = expl_font.getbbox(line_text)
+                    lw = lbbox[2] - lbbox[0]
+                    if lw > avail_w:
+                        while len(line_text) > 4 and \
+                              expl_font.getbbox(line_text + "\u2026")[2] > avail_w:
+                            line_text = line_text[:-1]
+                        line_text = line_text.rstrip(" \u00b7") + "\u2026"
+                        lbbox = expl_font.getbbox(line_text)
+                    lh = lbbox[3] - lbbox[1]
+                    tx = (W - (lbbox[2] - lbbox[0])) // 2
+                    ty = inner_top + i * _expl_line_h + (_expl_line_h - lh) // 2 - lbbox[1]
+                    draw.text((tx, ty), line_text, font=expl_font, fill=cfg.footer_color)
 
         return img
 

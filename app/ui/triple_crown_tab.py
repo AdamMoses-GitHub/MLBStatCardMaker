@@ -11,23 +11,17 @@ from PIL import Image, ImageTk
 
 from app.settings import Settings
 from app.utils.image_utils import apply_export_margin
-from app.cards.history_card import HistoryCardConfig, HistoryCardRenderer
-from app.data.history_api import (
-    fetch_history,
-    BATTING_SORT_LABELS,
-    PITCHING_SORT_LABELS,
-    STAT_TYPE_OPTIONS,
-    YEAR_SORT_OPTIONS,
-)
-from app.data.batters_api import BATTER_SCOPE_OPTIONS
+from app.cards.triple_crown_card import TripleCrownCardConfig, TripleCrownCardRenderer
+from app.data.triple_crown_api import fetch_triple_crown
+from app.data.batters_api import BATTER_SCOPE_OPTIONS, SORT_STAT_LABELS as BATTER_STAT_LABELS
+from app.data.pitchers_api import PITCHER_TYPE_OPTIONS, SORT_STAT_LABELS as PITCHER_STAT_LABELS
 
 THUMB_W = 480
 THUMB_H = 320
-
 _CURRENT_YEAR = datetime.date.today().year
 
 
-class HistoryTab(ttk.Frame):
+class TripleCrownTab(ttk.Frame):
     def __init__(self, parent: ttk.Notebook, settings: Settings, **kwargs):
         super().__init__(parent, **kwargs)
         self.settings = settings
@@ -59,8 +53,8 @@ class HistoryTab(ttk.Frame):
         size_frame = ttk.LabelFrame(parent, text="Card Size")
         size_frame.pack(fill="x", padx=8, pady=(8, 4))
 
-        self._width_var  = tk.DoubleVar(value=self.settings.history_width_in)
-        self._height_var = tk.DoubleVar(value=self.settings.history_height_in)
+        self._width_var  = tk.DoubleVar(value=self.settings.triple_crown_width_in)
+        self._height_var = tk.DoubleVar(value=self.settings.triple_crown_height_in)
 
         row = ttk.Frame(size_frame)
         row.pack(anchor="w", **pad)
@@ -84,139 +78,143 @@ class HistoryTab(ttk.Frame):
         self._orient_lbl.pack(anchor="w", padx=8, pady=(0, 4))
         self._update_orientation_label()
 
-        # ---- Scope ----
-        scope_frame = ttk.LabelFrame(parent, text="Scope")
-        scope_frame.pack(fill="x", padx=8, pady=4)
-
-        self._scope_var = tk.StringVar(value=self.settings.history_scope)
-        ttk.Combobox(scope_frame, textvariable=self._scope_var,
-                     values=BATTER_SCOPE_OPTIONS, state="readonly", width=20).pack(
-            anchor="w", **pad)
-
         # ---- Stat Type ----
         type_frame = ttk.LabelFrame(parent, text="Stat Type")
         type_frame.pack(fill="x", padx=8, pady=4)
 
-        self._stat_type_var = tk.StringVar(value=self.settings.history_stat_type)
-        for val in STAT_TYPE_OPTIONS:
+        self._stat_type_var = tk.StringVar(value=self.settings.triple_crown_stat_type)
+        for val in ("Batting", "Pitching"):
             ttk.Radiobutton(type_frame, text=val, variable=self._stat_type_var,
                             value=val, command=self._on_stat_type_changed).pack(
                 anchor="w", padx=8, pady=1)
+
+        # ---- Scope ----
+        scope_frame = ttk.LabelFrame(parent, text="Scope")
+        scope_frame.pack(fill="x", padx=8, pady=4)
+
+        self._scope_var = tk.StringVar(value=self.settings.triple_crown_scope)
+        ttk.Combobox(scope_frame, textvariable=self._scope_var,
+                     values=BATTER_SCOPE_OPTIONS, state="readonly", width=20).pack(
+            anchor="w", **pad)
 
         # ---- Query Options ----
         query_frame = ttk.LabelFrame(parent, text="Query Options")
         query_frame.pack(fill="x", padx=8, pady=4)
 
-        sort_row = ttk.Frame(query_frame)
-        sort_row.pack(anchor="w", **pad)
-        ttk.Label(sort_row, text="Stat (sort by):").pack(side="left")
-        self._sort_var = tk.StringVar(value=self.settings.history_sort_stat)
-        self._sort_cb  = ttk.Combobox(sort_row, textvariable=self._sort_var,
-                                       state="readonly", width=7)
-        self._sort_cb.pack(side="left", padx=4)
-        self._refresh_sort_options()   # populate based on current stat type
+        season_row = ttk.Frame(query_frame)
+        season_row.pack(anchor="w", **pad)
+        ttk.Label(season_row, text="Season:").pack(side="left")
+        _season = self.settings.triple_crown_season or _CURRENT_YEAR
+        self._season_var = tk.IntVar(value=_season)
+        ttk.Spinbox(season_row, from_=1900, to=_CURRENT_YEAR + 1,
+                    textvariable=self._season_var, width=6).pack(side="left", padx=4)
 
-        # Year range
-        yr_row = ttk.Frame(query_frame)
-        yr_row.pack(anchor="w", **pad)
-        ttk.Label(yr_row, text="Years:").pack(side="left")
+        topn_row = ttk.Frame(query_frame)
+        topn_row.pack(anchor="w", **pad)
+        ttk.Label(topn_row, text="Top N:").pack(side="left")
+        self._topn_var = tk.IntVar(value=self.settings.triple_crown_top_n)
+        ttk.Spinbox(topn_row, from_=3, to=25, textvariable=self._topn_var,
+                    width=5).pack(side="left", padx=4)
 
-        y_start = self.settings.history_year_start or (_CURRENT_YEAR - 6)
-        y_end   = self.settings.history_year_end   or _CURRENT_YEAR
-        self._year_start_var = tk.IntVar(value=y_start)
-        self._year_end_var   = tk.IntVar(value=y_end)
+        # Batting-specific controls
+        self._batting_frame = ttk.Frame(query_frame)
+        minpa_row = ttk.Frame(self._batting_frame)
+        minpa_row.pack(anchor="w", padx=8, pady=(0, 4))
+        ttk.Label(minpa_row, text="Min PA:").pack(side="left")
+        self._minpa_var = tk.IntVar(value=self.settings.triple_crown_min_pa)
+        ttk.Spinbox(minpa_row, from_=0, to=700, textvariable=self._minpa_var,
+                    width=5).pack(side="left", padx=4)
 
-        ttk.Spinbox(yr_row, from_=1903, to=_CURRENT_YEAR,
-                    textvariable=self._year_start_var, width=6).pack(side="left", padx=(4, 2))
-        ttk.Label(yr_row, text="\u2013").pack(side="left")
-        ttk.Spinbox(yr_row, from_=1903, to=_CURRENT_YEAR,
-                    textvariable=self._year_end_var, width=6).pack(side="left", padx=(2, 0))
+        # Batting stat selectors (3 panels)
+        _b_defaults = (self.settings.triple_crown_batting_stats
+                       or ["AVG", "HR", "RBI"])
+        ttk.Label(self._batting_frame, text="Panel stats:").pack(
+            anchor="w", padx=8, pady=(2, 0))
+        self._batting_stat_vars: list[tk.StringVar] = []
+        for i, default in enumerate((_b_defaults + ["AVG", "HR", "RBI"])[:3]):
+            v = tk.StringVar(value=default)
+            self._batting_stat_vars.append(v)
+            row = ttk.Frame(self._batting_frame)
+            row.pack(anchor="w", padx=8, pady=1)
+            ttk.Label(row, text=f"  Panel {i+1}:", width=9).pack(side="left")
+            ttk.Combobox(row, textvariable=v, values=BATTER_STAT_LABELS,
+                         state="readonly", width=7).pack(side="left")
 
-        self._range_warn_lbl = ttk.Label(query_frame, text="", foreground="#cc6600",
-                                          wraplength=250)
-        self._range_warn_lbl.pack(anchor="w", padx=8, pady=(0, 2))
-        self._year_start_var.trace_add("write", self._on_year_range_changed)
-        self._year_end_var.trace_add("write",   self._on_year_range_changed)
-        self._on_year_range_changed()
+        # Pitching-specific controls
+        self._pitching_frame = ttk.Frame(query_frame)
 
-        # Year sort order
-        sort_dir_row = ttk.Frame(query_frame)
-        sort_dir_row.pack(anchor="w", padx=8, pady=(2, 4))
-        ttk.Label(sort_dir_row, text="Year order:").pack(side="left")
-        self._year_sort_var = tk.StringVar(value=self.settings.history_year_sort)
-        for val in YEAR_SORT_OPTIONS:
-            ttk.Radiobutton(sort_dir_row, text=val, variable=self._year_sort_var,
-                            value=val).pack(side="left", padx=(6, 0))
+        pt_row = ttk.Frame(self._pitching_frame)
+        pt_row.pack(anchor="w", padx=8, pady=(2, 1))
+        ttk.Label(pt_row, text="Type:").pack(side="left")
+        self._pitcher_type_var = tk.StringVar(
+            value=self.settings.triple_crown_pitcher_type)
+        for val in PITCHER_TYPE_OPTIONS:
+            ttk.Radiobutton(pt_row, text=val, variable=self._pitcher_type_var,
+                            value=val).pack(side="left", padx=2)
 
-        # ---- Pitching Qualifier (hidden when Batting) ----
-        self._qual_frame = ttk.LabelFrame(parent, text="Pitching Qualifier")
-        # packed/unpacked by _on_stat_type_changed
-
-        self._pitcher_type_var = tk.StringVar(value=self.settings.history_pitcher_type)
-        for val in ("All", "Starters", "Relievers"):
-            ttk.Radiobutton(self._qual_frame, text=val,
-                            variable=self._pitcher_type_var, value=val).pack(
-                anchor="w", padx=8, pady=1)
-
-        self._minip_var = tk.DoubleVar(value=self.settings.history_min_ip)
-        minip_row = ttk.Frame(self._qual_frame)
-        minip_row.pack(anchor="w", padx=8, pady=(2, 4))
+        minip_row = ttk.Frame(self._pitching_frame)
+        minip_row.pack(anchor="w", padx=8, pady=1)
         ttk.Label(minip_row, text="Min IP:").pack(side="left")
-        ttk.Spinbox(minip_row, from_=0, to=300, increment=10,
+        self._minip_var = tk.DoubleVar(value=self.settings.triple_crown_min_ip)
+        ttk.Spinbox(minip_row, from_=0, to=300, increment=5.0,
                     textvariable=self._minip_var, width=6).pack(side="left", padx=4)
 
-        self._ming_var = tk.IntVar(value=self.settings.history_min_g)
-        ming_row = ttk.Frame(self._qual_frame)
-        ming_row.pack(anchor="w", padx=8, pady=(0, 4))
-        ttk.Label(ming_row, text="Min G (RP):").pack(side="left")
-        ttk.Spinbox(ming_row, from_=0, to=162,
-                    textvariable=self._ming_var, width=5).pack(side="left", padx=4)
+        ming_row = ttk.Frame(self._pitching_frame)
+        ming_row.pack(anchor="w", padx=8, pady=(1, 4))
+        ttk.Label(ming_row, text="Min G:").pack(side="left")
+        self._ming_var = tk.IntVar(value=self.settings.triple_crown_min_g)
+        ttk.Spinbox(ming_row, from_=0, to=162, textvariable=self._ming_var,
+                    width=5).pack(side="left", padx=4)
 
-        # ---- Batting Qualifier (hidden when Pitching) ----
-        self._batter_qual_frame = ttk.LabelFrame(parent, text="Batting Qualifier")
-        # packed/unpacked by _on_stat_type_changed
-
-        self._minpa_var = tk.IntVar(value=self.settings.history_min_pa)
-        minpa_row = ttk.Frame(self._batter_qual_frame)
-        minpa_row.pack(anchor="w", padx=8, pady=4)
-        ttk.Label(minpa_row, text="Min PA:").pack(side="left")
-        ttk.Spinbox(minpa_row, from_=0, to=700,
-                    textvariable=self._minpa_var, width=5).pack(side="left", padx=4)
-
-        self._on_stat_type_changed()   # show correct qualifier frame
+        # Pitching stat selectors (3 panels)
+        _p_defaults = (self.settings.triple_crown_pitching_stats
+                       or ["W", "SO", "ERA"])
+        ttk.Label(self._pitching_frame, text="Panel stats:").pack(
+            anchor="w", padx=8, pady=(2, 0))
+        self._pitching_stat_vars: list[tk.StringVar] = []
+        for i, default in enumerate((_p_defaults + ["W", "SO", "ERA"])[:3]):
+            v = tk.StringVar(value=default)
+            self._pitching_stat_vars.append(v)
+            row = ttk.Frame(self._pitching_frame)
+            row.pack(anchor="w", padx=8, pady=1)
+            ttk.Label(row, text=f"  Panel {i+1}:", width=9).pack(side="left")
+            ttk.Combobox(row, textvariable=v, values=PITCHER_STAT_LABELS,
+                         state="readonly", width=7).pack(side="left")
 
         # ---- Display Options ----
         opt_frame = ttk.LabelFrame(parent, text="Display Options")
         opt_frame.pack(fill="x", padx=8, pady=4)
 
-        self._show_logos_var = tk.BooleanVar(value=self.settings.history_show_logos)
+        self._show_logos_var = tk.BooleanVar(value=self.settings.triple_crown_show_logos)
         ttk.Checkbutton(opt_frame, text="Show team logos",
                         variable=self._show_logos_var).pack(
             anchor="w", padx=8, pady=(4, 2))
 
-        self._show_ts_var = tk.BooleanVar(value=self.settings.history_show_timestamp)
+        self._show_badges_var = tk.BooleanVar(
+            value=self.settings.triple_crown_show_rank_badges)
+        ttk.Checkbutton(opt_frame, text="Show rank badges (gold / silver / copper)",
+                        variable=self._show_badges_var).pack(
+            anchor="w", padx=8, pady=(1, 2))
+
+        self._show_ts_var = tk.BooleanVar(
+            value=self.settings.triple_crown_show_timestamp)
         ttk.Checkbutton(opt_frame, text="Show 'data as of' timestamp",
                         variable=self._show_ts_var).pack(
-            anchor="w", padx=8, pady=(0, 2))
-
-        self._show_explainers_var = tk.BooleanVar(
-            value=self.settings.history_show_col_explainers)
-        ttk.Checkbutton(opt_frame, text="Show column explainers",
-                        variable=self._show_explainers_var).pack(
             anchor="w", padx=8, pady=(0, 4))
 
         # ---- Background Color ----
         bg_frame = ttk.LabelFrame(parent, text="Background Color")
         bg_frame.pack(fill="x", padx=8, pady=4)
 
-        self._bg_var = tk.StringVar(value=self.settings.history_bg_color)
+        self._bg_var = tk.StringVar(value=self.settings.triple_crown_bg_color)
         bg_row = ttk.Frame(bg_frame)
         bg_row.pack(anchor="w", **pad)
         ttk.Entry(bg_row, textvariable=self._bg_var, width=9).pack(side="left")
         self._bg_swatch = tk.Label(bg_row, width=3, relief="sunken",
-                                   background=self.settings.history_bg_color)
+                                   background=self.settings.triple_crown_bg_color)
         self._bg_swatch.pack(side="left", padx=3)
-        ttk.Button(bg_row, text="Pick\u2026", command=self._pick_bg_color).pack(side="left")
+        ttk.Button(bg_row, text="Pick\u2026", command=self._pick_bg_color).pack(
+            side="left")
         self._bg_var.trace_add("write", self._on_bg_changed)
 
         # ---- Fetch & Preview ----
@@ -244,13 +242,15 @@ class HistoryTab(ttk.Frame):
         export_frame = ttk.LabelFrame(parent, text="Export")
         export_frame.pack(fill="x", padx=8, pady=(4, 8))
 
-        self._export_name_var = tk.StringVar(value=self.settings.history_export_filename)
+        self._export_name_var = tk.StringVar(
+            value=self.settings.triple_crown_export_filename)
         ttk.Label(export_frame, text="Filename (no extension):").pack(
             anchor="w", padx=8, pady=(4, 0))
         ttk.Entry(export_frame, textvariable=self._export_name_var, width=24).pack(
             fill="x", padx=8, pady=2)
 
-        self._append_ts_var = tk.BooleanVar(value=self.settings.history_append_timestamp)
+        self._append_ts_var = tk.BooleanVar(
+            value=self.settings.triple_crown_append_timestamp)
         ttk.Checkbutton(export_frame, text="Append timestamp to filename",
                         variable=self._append_ts_var).pack(
             anchor="w", padx=8, pady=(0, 4))
@@ -266,6 +266,9 @@ class HistoryTab(ttk.Frame):
                                           state="disabled")
         self._export_jpg_btn.pack(side="left")
 
+        # Show/hide batting vs pitching controls
+        self._on_stat_type_changed()
+
     def _build_preview(self, parent: ttk.LabelFrame) -> None:
         self._canvas = tk.Canvas(parent, bg="#CCCCCC", width=THUMB_W, height=THUMB_H)
         self._canvas.pack(fill="both", expand=True, padx=8, pady=8)
@@ -276,6 +279,14 @@ class HistoryTab(ttk.Frame):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _on_stat_type_changed(self) -> None:
+        if self._stat_type_var.get() == "Batting":
+            self._batting_frame.pack(fill="x")
+            self._pitching_frame.pack_forget()
+        else:
+            self._batting_frame.pack_forget()
+            self._pitching_frame.pack(fill="x")
+
     def _update_orientation_label(self) -> None:
         try:
             w = self._width_var.get()
@@ -287,40 +298,6 @@ class HistoryTab(ttk.Frame):
 
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
-
-    def _on_stat_type_changed(self, *_) -> None:
-        """Show the correct qualifier frame and update the sort stat combobox."""
-        self._refresh_sort_options()
-        if self._stat_type_var.get() == "Pitching":
-            self._batter_qual_frame.pack_forget()
-            self._qual_frame.pack(fill="x", padx=8, pady=4)
-        else:
-            self._qual_frame.pack_forget()
-            self._batter_qual_frame.pack(fill="x", padx=8, pady=4)
-
-    def _refresh_sort_options(self) -> None:
-        stat_type = self._stat_type_var.get()
-        opts = PITCHING_SORT_LABELS if stat_type == "Pitching" else BATTING_SORT_LABELS
-        self._sort_cb["values"] = opts
-        current = self._sort_var.get()
-        if current not in opts:
-            self._sort_var.set(opts[0])
-
-    def _on_year_range_changed(self, *_) -> None:
-        try:
-            y1 = int(self._year_start_var.get())
-            y2 = int(self._year_end_var.get())
-        except (tk.TclError, ValueError):
-            self._range_warn_lbl.config(text="")
-            return
-        span = y2 - y1 + 1
-        if y1 > y2:
-            self._range_warn_lbl.config(text="\u26a0 Start year must be \u2264 end year")
-        elif span > 10:
-            self._range_warn_lbl.config(
-                text=f"\u26a0 {span} seasons — first fetch may be slow")
-        else:
-            self._range_warn_lbl.config(text="")
 
     def _pick_bg_color(self) -> None:
         color = colorchooser.askcolor(
@@ -367,52 +344,36 @@ class HistoryTab(ttk.Frame):
                 f"Invalid background color \u201c{color}\u201d \u2014 use #RGB or #RRGGBB",
                 error=True)
             return
-        try:
-            y1 = int(self._year_start_var.get())
-            y2 = int(self._year_end_var.get())
-        except (tk.TclError, ValueError):
-            self._set_status("Invalid year range.", error=True)
-            return
-        if y1 > y2:
-            self._set_status("Start year must be \u2264 end year.", error=True)
-            return
-
         self._fetching = True
         self._fetch_btn.config(state="disabled")
         self._refresh_btn.config(state="disabled")
-        total = y2 - y1 + 1
-        self._set_status(f"Fetching {y1}\u2026 (1/{total})", error=False)
+        stat_type = self._stat_type_var.get()
+        self._set_status(f"Fetching {stat_type.lower()} stats\u2026", error=False)
         self._canvas.delete("all")
         self._canvas.create_text(
             THUMB_W // 2, THUMB_H // 2,
             text="Fetching data\u2026", fill="#555555", font=("Arial", 11))
-        threading.Thread(target=self._do_fetch, args=(y1, y2, total, force),
-                         daemon=True).start()
+        threading.Thread(target=self._do_fetch, args=(force,), daemon=True).start()
 
     def _force_refresh(self) -> None:
         self._fetch_and_preview(force=True)
 
-    def _do_fetch(self, y1: int, y2: int, total: int, force: bool) -> None:
-        def progress(season: int, idx: int, tot: int) -> None:
-            self.after(0, lambda: self._set_status(
-                f"Fetching {season}\u2026 ({idx}/{tot})", error=False))
-
+    def _do_fetch(self, force: bool) -> None:
         try:
-            block = fetch_history(
+            block = fetch_triple_crown(
                 scope=self._scope_var.get(),
                 stat_type=self._stat_type_var.get(),
-                sort_stat=self._sort_var.get(),
-                year_start=y1,
-                year_end=y2,
-                min_pa=int(self._minpa_var.get()),
-                min_ip=float(self._minip_var.get()),
-                min_g=int(self._ming_var.get()),
+                top_n=self._topn_var.get(),
+                min_pa=self._minpa_var.get(),
+                min_ip=self._minip_var.get(),
+                min_g=self._ming_var.get(),
                 pitcher_type=self._pitcher_type_var.get(),
+                season=self._season_var.get(),
                 ttl_minutes=self.settings.data_cache_ttl_minutes,
                 working_dir=self.settings.working_dir,
                 force_refresh=force,
-                year_sort=self._year_sort_var.get(),
-                progress_cb=progress,
+                batting_stats=[v.get() for v in self._batting_stat_vars],
+                pitching_stats=[v.get() for v in self._pitching_stat_vars],
             )
             self.after(0, lambda: self._do_render(block))
         except Exception as exc:
@@ -422,14 +383,14 @@ class HistoryTab(ttk.Frame):
     def _do_render(self, block) -> None:
         try:
             cfg = self._build_card_config()
-            renderer = HistoryCardRenderer(cfg, block,
-                                           working_dir=self.settings.working_dir)
+            renderer = TripleCrownCardRenderer(cfg, block,
+                                               working_dir=self.settings.working_dir)
             self._card_image = renderer.render()
             self._update_thumbnail()
-            n = len(block.entries)
+            labels = " / ".join(c.stat_label for c in block.columns)
+            n = len(block.columns[0].entries) if block.columns else 0
             self._set_status(
-                f"Done — {n} season{'s' if n != 1 else ''} "
-                f"({block.year_start}\u2013{block.year_end})",
+                f"Done \u2014 {labels}  \u00b7  top {n} each",
                 error=False)
             self._full_preview_btn.config(state="normal")
             self._export_png_btn.config(state="normal")
@@ -448,35 +409,34 @@ class HistoryTab(ttk.Frame):
         self._draw_placeholder()
         self._set_status(f"Error: {msg}", error=True)
 
-    def _build_card_config(self) -> HistoryCardConfig:
-        return HistoryCardConfig(
+    def _build_card_config(self) -> TripleCrownCardConfig:
+        return TripleCrownCardConfig(
             width_in=self._width_var.get(),
             height_in=self._height_var.get(),
             dpi=self.settings.dpi,
             bg_color=self._bg_var.get(),
             scope=self._scope_var.get(),
             stat_type=self._stat_type_var.get(),
-            sort_stat=self._sort_var.get(),
+            top_n=self._topn_var.get(),
             show_logos=self._show_logos_var.get(),
+            show_rank_badges=self._show_badges_var.get(),
             show_timestamp=self._show_ts_var.get(),
-            show_col_explainers=self._show_explainers_var.get(),
-            col_explainer_sep=self.settings.col_explainer_sep,
         )
 
     def _update_thumbnail(self) -> None:
         if self._card_image is None:
             return
-        img   = self._card_image
-        cw    = self._canvas.winfo_width()  or THUMB_W
-        ch    = self._canvas.winfo_height() or THUMB_H
+        img = self._card_image
+        cw  = self._canvas.winfo_width()  or THUMB_W
+        ch  = self._canvas.winfo_height() or THUMB_H
         ratio = min(cw / img.width, ch / img.height)
-        tw    = max(1, round(img.width  * ratio))
-        th    = max(1, round(img.height * ratio))
+        tw = max(1, round(img.width  * ratio))
+        th = max(1, round(img.height * ratio))
         thumb = img.resize((tw, th), Image.LANCZOS)
         self._thumb_photo = ImageTk.PhotoImage(thumb)
         self._canvas.delete("all")
         self._canvas.create_image(cw // 2, ch // 2, anchor="center",
-                                  image=self._thumb_photo)
+                                   image=self._thumb_photo)
 
     # ------------------------------------------------------------------
     # Full preview
@@ -485,14 +445,14 @@ class HistoryTab(ttk.Frame):
         if self._card_image is None:
             return
         win = tk.Toplevel(self)
-        win.title("Season Leaders History \u2014 Full Preview")
-        img   = self._card_image
+        win.title("Triple Crown Card \u2014 Full Preview")
+        img = self._card_image
         max_w = 1200
         ratio = min(1.0, max_w / img.width)
-        dw    = round(img.width  * ratio)
-        dh    = round(img.height * ratio)
+        dw = round(img.width  * ratio)
+        dh = round(img.height * ratio)
         display = img.resize((dw, dh), Image.LANCZOS) if ratio < 1.0 else img
-        photo   = ImageTk.PhotoImage(display)
+        photo = ImageTk.PhotoImage(display)
         lbl = tk.Label(win, image=photo)
         lbl.image = photo
         lbl.pack()
@@ -519,20 +479,19 @@ class HistoryTab(ttk.Frame):
                     return
             else:
                 return
-        output_dir = os.path.join(working_dir, "output", "history")
+        output_dir = os.path.join(working_dir, "output", "triple_crown")
         os.makedirs(output_dir, exist_ok=True)
         ext      = ".png" if fmt == "PNG" else ".jpg"
-        raw_name = self._export_name_var.get().strip() or "history_card"
+        raw_name = self._export_name_var.get().strip() or "triple_crown_card"
         base     = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", raw_name).strip(". ")
         if not base:
-            base = "history_card"
+            base = "triple_crown_card"
         if self._append_ts_var.get():
             ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             base = f"{base}_{ts}"
-        filename = base + ext
-        out_path = os.path.join(output_dir, filename)
+        out_path = os.path.join(output_dir, base + ext)
         try:
-            cfg   = self._build_card_config()
+            cfg = self._build_card_config()
             export_img = apply_export_margin(
                 self._card_image, cfg.bg_color,
                 self.settings.export_canvas_margin_pct)
@@ -545,36 +504,36 @@ class HistoryTab(ttk.Frame):
     # Persist settings
     # ------------------------------------------------------------------
     def apply(self) -> None:
-        self.settings.history_scope        = self._scope_var.get()
-        self.settings.history_stat_type    = self._stat_type_var.get()
-        self.settings.history_sort_stat    = self._sort_var.get()
-        self.settings.history_pitcher_type = self._pitcher_type_var.get()
+        self.settings.triple_crown_scope        = self._scope_var.get()
+        self.settings.triple_crown_stat_type    = self._stat_type_var.get()
+        self.settings.triple_crown_pitcher_type = self._pitcher_type_var.get()
+        self.settings.triple_crown_show_logos   = self._show_logos_var.get()
+        self.settings.triple_crown_show_rank_badges = self._show_badges_var.get()
+        self.settings.triple_crown_show_timestamp = self._show_ts_var.get()
+        self.settings.triple_crown_batting_stats  = [v.get() for v in self._batting_stat_vars]
+        self.settings.triple_crown_pitching_stats = [v.get() for v in self._pitching_stat_vars]
+        self.settings.triple_crown_width_in     = self._width_var.get()
+        self.settings.triple_crown_height_in    = self._height_var.get()
+        self.settings.triple_crown_bg_color     = self._bg_var.get()
+        self.settings.triple_crown_export_filename = self._export_name_var.get().strip()
+        self.settings.triple_crown_append_timestamp = self._append_ts_var.get()
         try:
-            self.settings.history_year_start = int(self._year_start_var.get())
+            self.settings.triple_crown_season = int(self._season_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.history_year_end   = int(self._year_end_var.get())
+            self.settings.triple_crown_top_n = int(self._topn_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.history_min_pa     = int(self._minpa_var.get())
+            self.settings.triple_crown_min_pa = int(self._minpa_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.history_min_ip     = float(self._minip_var.get())
+            self.settings.triple_crown_min_ip = float(self._minip_var.get())
         except (tk.TclError, ValueError):
             pass
         try:
-            self.settings.history_min_g      = int(self._ming_var.get())
+            self.settings.triple_crown_min_g = int(self._ming_var.get())
         except (tk.TclError, ValueError):
             pass
-        self.settings.history_show_logos       = self._show_logos_var.get()
-        self.settings.history_show_timestamp   = self._show_ts_var.get()
-        self.settings.history_show_col_explainers = self._show_explainers_var.get()
-        self.settings.history_width_in         = self._width_var.get()
-        self.settings.history_height_in        = self._height_var.get()
-        self.settings.history_bg_color         = self._bg_var.get()
-        self.settings.history_export_filename  = self._export_name_var.get().strip()
-        self.settings.history_append_timestamp = self._append_ts_var.get()
-        self.settings.history_year_sort        = self._year_sort_var.get()

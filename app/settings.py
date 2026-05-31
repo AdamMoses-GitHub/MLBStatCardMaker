@@ -81,6 +81,7 @@ class Settings:
     history_min_g: int = 20
     history_show_logos: bool = True
     history_show_timestamp: bool = False
+    history_show_col_explainers: bool = False
     history_width_in: float = 6.0
     history_height_in: float = 5.0
     history_bg_color: str = "#FFFFFF"
@@ -118,6 +119,45 @@ class Settings:
     matchup_bg_color: str = "#FFFFFF"
     matchup_export_filename: str = "matchup_card"
     matchup_append_timestamp: bool = True
+
+    # Triple Crown card
+    triple_crown_scope: str = "All MLB"
+    triple_crown_stat_type: str = "Batting"
+    triple_crown_top_n: int = 10
+    triple_crown_season: int = 0          # 0 = current year
+    triple_crown_min_pa: int = 50
+    triple_crown_min_ip: float = 30.0
+    triple_crown_min_g: int = 10
+    triple_crown_pitcher_type: str = "All"
+    triple_crown_show_logos: bool = True
+    triple_crown_show_rank_badges: bool = True
+    triple_crown_show_timestamp: bool = False
+    triple_crown_batting_stats: list = field(default_factory=lambda: ["AVG", "HR", "RBI"])
+    triple_crown_pitching_stats: list = field(default_factory=lambda: ["W", "SO", "ERA"])
+    triple_crown_width_in: float = 9.0
+    triple_crown_height_in: float = 6.0
+    triple_crown_bg_color: str = "#FFFFFF"
+    triple_crown_export_filename: str = "triple_crown_card"
+    triple_crown_append_timestamp: bool = True
+
+    # Player Career card
+    career_stat_type: str = "Batting"
+    career_player_id: int = 0
+    career_player_name: str = ""
+    career_current_team_abbrev: str = ""
+    career_year_start: int = 0            # 0 = full career start
+    career_year_end: int = 0              # 0 = full career end
+    career_year_sort: str = "Ascending"
+    career_recent_players: list = field(default_factory=list)  # [{id,name,team}, ...]
+    career_show_logos: bool = True
+    career_highlight_current: bool = True
+    career_show_timestamp: bool = False
+    career_show_col_explainers: bool = False
+    career_width_in: float = 7.0
+    career_height_in: float = 6.0
+    career_bg_color: str = "#FFFFFF"
+    career_export_filename: str = "career_card"
+    career_append_timestamp: bool = True
 
     # Column explainers (all cards)
     standings_show_col_explainers: bool = False

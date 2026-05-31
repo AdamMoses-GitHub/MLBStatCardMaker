@@ -63,6 +63,11 @@ def get_logo(abbrev: str, size_px: int, working_dir: str) -> Optional[Image.Imag
     Returns None on any failure.
     """
     abbrev = abbrev.upper()
+
+    # Reject sentinel / placeholder values that can never resolve to a real logo
+    if not abbrev or abbrev in ("---", "UNK", "N/A") or not abbrev.replace(" ", "").isalnum():
+        return None
+
     cache = _cache_path(working_dir, abbrev)
 
     # Return cached version if it exists

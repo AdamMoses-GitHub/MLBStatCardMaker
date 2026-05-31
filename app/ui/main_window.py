@@ -17,6 +17,8 @@ from app.ui.pitcher_tab import PitcherTab
 from app.ui.history_tab import HistoryTab
 from app.ui.roster_tab import RosterTab
 from app.ui.matchup_tab import MatchupTab
+from app.ui.triple_crown_tab import TripleCrownTab
+from app.ui.career_tab import CareerTab
 
 
 class MainWindow(tk.Tk):
@@ -43,15 +45,19 @@ class MainWindow(tk.Tk):
         self._pitcher_tab = PitcherTab(self.notebook, self.settings)
         self._history_tab = HistoryTab(self.notebook, self.settings)
         self._roster_tab  = RosterTab(self.notebook, self.settings)
-        self._matchup_tab = MatchupTab(self.notebook, self.settings)
+        self._matchup_tab      = MatchupTab(self.notebook, self.settings)
+        self._triple_crown_tab = TripleCrownTab(self.notebook, self.settings)
+        self._career_tab       = CareerTab(self.notebook, self.settings)
 
-        self.notebook.add(self._standings_tab, text="  Standings  ")
-        self.notebook.add(self._batter_tab,    text="  Top Batters  ")
-        self.notebook.add(self._pitcher_tab,   text="  Top Pitchers  ")
-        self.notebook.add(self._history_tab,   text="  Season Leaders  ")
-        self.notebook.add(self._roster_tab,    text="  Team Roster  ")
-        self.notebook.add(self._matchup_tab,   text="  Matchup  ")
-        self.notebook.add(self._settings_tab,  text="  Settings  ")
+        self.notebook.add(self._standings_tab,   text="  Standings  ")
+        self.notebook.add(self._batter_tab,      text="  Top Batters  ")
+        self.notebook.add(self._pitcher_tab,     text="  Top Pitchers  ")
+        self.notebook.add(self._triple_crown_tab, text="  Triple Crown  ")
+        self.notebook.add(self._history_tab,     text="  Season Leaders  ")
+        self.notebook.add(self._roster_tab,      text="  Team Roster  ")
+        self.notebook.add(self._matchup_tab,     text="  Matchup  ")
+        self.notebook.add(self._career_tab,      text="  Player Career  ")
+        self.notebook.add(self._settings_tab,    text="  Settings  ")
 
         # --- Persistent bottom bar ---
         bar = ttk.Frame(self, relief="groove")
@@ -93,6 +99,8 @@ class MainWindow(tk.Tk):
         self._history_tab.apply()
         self._roster_tab.apply()
         self._matchup_tab.apply()
+        self._triple_crown_tab.apply()
+        self._career_tab.apply()
         self.settings.window_geometry = self.geometry()
         try:
             self.settings.save(self.settings.working_dir)
