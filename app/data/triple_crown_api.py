@@ -94,8 +94,10 @@ def fetch_triple_crown(
                 (lbl, BATTER_FIELD_MAP[lbl])
                 for lbl in batting_stats
                 if lbl in BATTER_FIELD_MAP
-            ][:3]
+            ]
         else:
+            stat_pairs = []
+        if len(stat_pairs) != 3:
             stat_pairs = list(BATTING_TRIPLE)
         block, _ = fetch_batters_cached(
             season=season,
@@ -130,8 +132,10 @@ def fetch_triple_crown(
                 (lbl, PITCHER_FIELD_MAP[lbl])
                 for lbl in pitching_stats
                 if lbl in PITCHER_FIELD_MAP
-            ][:3]
+            ]
         else:
+            stat_pairs = []
+        if len(stat_pairs) != 3:
             stat_pairs = list(PITCHING_TRIPLE)
         block, _ = fetch_pitchers_cached(
             season=season,

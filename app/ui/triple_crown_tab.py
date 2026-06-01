@@ -126,12 +126,16 @@ class TripleCrownTab(ttk.Frame):
                     width=5).pack(side="left", padx=4)
 
         # Batting stat selectors (3 panels)
-        _b_defaults = (self.settings.triple_crown_batting_stats
-                       or ["AVG", "HR", "RBI"])
+        _b_saved = self.settings.triple_crown_batting_stats or []
+        _b_fallbacks = ["AVG", "HR", "RBI"]
+        _b_defaults = [
+            lbl if lbl in BATTER_STAT_LABELS else _b_fallbacks[i]
+            for i, lbl in enumerate((_b_saved + _b_fallbacks)[:3])
+        ]
         ttk.Label(self._batting_frame, text="Panel stats:").pack(
             anchor="w", padx=8, pady=(2, 0))
         self._batting_stat_vars: list[tk.StringVar] = []
-        for i, default in enumerate((_b_defaults + ["AVG", "HR", "RBI"])[:3]):
+        for i, default in enumerate(_b_defaults):
             v = tk.StringVar(value=default)
             self._batting_stat_vars.append(v)
             row = ttk.Frame(self._batting_frame)
@@ -167,12 +171,16 @@ class TripleCrownTab(ttk.Frame):
                     width=5).pack(side="left", padx=4)
 
         # Pitching stat selectors (3 panels)
-        _p_defaults = (self.settings.triple_crown_pitching_stats
-                       or ["W", "SO", "ERA"])
+        _p_saved = self.settings.triple_crown_pitching_stats or []
+        _p_fallbacks = ["W", "SO", "ERA"]
+        _p_defaults = [
+            lbl if lbl in PITCHER_STAT_LABELS else _p_fallbacks[i]
+            for i, lbl in enumerate((_p_saved + _p_fallbacks)[:3])
+        ]
         ttk.Label(self._pitching_frame, text="Panel stats:").pack(
             anchor="w", padx=8, pady=(2, 0))
         self._pitching_stat_vars: list[tk.StringVar] = []
-        for i, default in enumerate((_p_defaults + ["W", "SO", "ERA"])[:3]):
+        for i, default in enumerate(_p_defaults):
             v = tk.StringVar(value=default)
             self._pitching_stat_vars.append(v)
             row = ttk.Frame(self._pitching_frame)

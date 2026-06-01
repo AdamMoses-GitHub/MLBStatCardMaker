@@ -408,9 +408,25 @@ def _build_batting_entries(
             else:
                 ops = "---"
 
-        if multi and total_split is None:
-            team_abbrev = "2 TM"
-            team_name   = "Multiple Teams"
+        if multi:
+            # Collect per-team abbreviations from the individual splits
+            # (skip the synthetic "2 Teams" totals row which has no real team id)
+            per_team_splits = [
+                s for s in splits
+                if s.get("team", {}).get("id", 0)
+                and "Team" not in s.get("team", {}).get("name", "")
+            ]
+            abbrevs = [
+                _get_team_abbrev(int(s["team"]["id"]))
+                for s in per_team_splits
+            ]
+            if len(abbrevs) == 2:
+                team_abbrev = f"{abbrevs[0]}/{abbrevs[1]}"
+            elif len(abbrevs) > 2:
+                team_abbrev = f"{len(abbrevs)} TM"
+            else:
+                team_abbrev = "2 TM"  # fallback if splits unexpectedly empty
+            team_name = "Multiple Teams"
         else:
             t = splits_to_use[0].get("team", {})
             team_id     = t.get("id", 0)
@@ -421,7 +437,7 @@ def _build_batting_entries(
             season=season,
             team_abbrev=team_abbrev,
             team_name=team_name,
-            multi_team=(multi and total_split is None),
+            multi_team=multi,
             is_current_season=(season == current_yr),
             games=g,
             at_bats=ab,
@@ -487,9 +503,23 @@ def _build_pitching_entries(
             era  = _fmt_era(er, total_outs)
             whip = _fmt_whip(bb, h, total_outs)
 
-        if multi and total_split is None:
-            team_abbrev = "2 TM"
-            team_name   = "Multiple Teams"
+        if multi:
+            per_team_splits = [
+                s for s in splits
+                if s.get("team", {}).get("id", 0)
+                and "Team" not in s.get("team", {}).get("name", "")
+            ]
+            abbrevs = [
+                _get_team_abbrev(int(s["team"]["id"]))
+                for s in per_team_splits
+            ]
+            if len(abbrevs) == 2:
+                team_abbrev = f"{abbrevs[0]}/{abbrevs[1]}"
+            elif len(abbrevs) > 2:
+                team_abbrev = f"{len(abbrevs)} TM"
+            else:
+                team_abbrev = "2 TM"
+            team_name = "Multiple Teams"
         else:
             t = splits_to_use[0].get("team", {})
             team_id     = t.get("id", 0)
@@ -500,7 +530,7 @@ def _build_pitching_entries(
             season=season,
             team_abbrev=team_abbrev,
             team_name=team_name,
-            multi_team=(multi and total_split is None),
+            multi_team=multi,
             is_current_season=(season == current_yr),
             games=g,
             wins=w,
