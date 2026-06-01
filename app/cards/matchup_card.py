@@ -23,6 +23,24 @@ _TOTAL_W  = _LEFT_W + _CENTER_W + _RIGHT_W
 _WIN_HIGHLIGHT_DEFAULT = "#D4EDDA"   # soft green
 _TIE_BG  = None                      # no highlight
 
+# Explainer text for each stat abbreviation used in the center label column
+_COL_EXPLAINERS: dict[str, str] = {
+    "W-L":    "Wins – Losses",
+    "RS/G":   "Runs Scored per Game",
+    "ERA":    "Earned Run Average",
+    "WHIP":   "Walks + Hits per IP",
+    "AVG":    "Batting Average",
+    "HR":     "Home Runs",
+    "OPS":    "On-base + Slugging",
+    "SO":     "Strikeouts (pitching)",
+    "SB":     "Stolen Bases",
+    "SV":     "Saves",
+    "RA/G":   "Runs Allowed per Game",
+    "BB":     "Walks Allowed",
+    "HR Alw": "Home Runs Allowed",
+    "SHO":    "Shutouts",
+}
+
 
 def _pt_px(pt: float, dpi: int) -> int:
     return max(1, round(pt * dpi / 72))
@@ -41,6 +59,8 @@ class MatchupCardConfig(CardConfig):
     win_highlight_color: str = _WIN_HIGHLIGHT_DEFAULT
     show_logos: bool = True
     show_timestamp: bool = False
+    show_col_explainers: bool = False
+    col_explainer_sep: str = "="
 
     # Colors
     title_bg: str    = "#1a3a5c"
@@ -85,7 +105,9 @@ class MatchupCardRenderer:
         title_h      = max(20, round(H * 0.08))
         team_hdr_h   = max(28, round(H * 0.12))
         footer_h     = max(10, round(H * 0.04)) if cfg.show_timestamp else 0
-        available_h  = H - title_h - team_hdr_h - footer_h - PAD
+        _expl_line_h = max(9, round(H * 0.028))
+        explainer_h  = (_expl_line_h * 2 + 6) if cfg.show_col_explainers else 0
+        available_h  = H - title_h - team_hdr_h - footer_h - explainer_h - PAD
         row_h        = max(12, available_h // max(n_data_rows, 1))
 
         title_font_size = min(max(9,  round(title_h    * 0.50)), _pt_px(16, cfg.dpi))
@@ -230,6 +252,35 @@ class MatchupCardRenderer:
             draw.rectangle([0, H - footer_h, W, H], fill=cfg.bg_color)
             self._draw_center_text(draw, ts, 0, footer_h, W, footer_font,
                                    cfg.footer_color, y_offset=H - footer_h)
+
+        # ---- Column explainers ----
+        if cfg.show_col_explainers and explainer_h > 0:
+            sep   = cfg.col_explainer_sep
+            rows_for_expl = get_stat_rows(cfg.stat_set)
+            items = [
+                f"{label} {sep} {_COL_EXPLAINERS.get(label, label)}"
+                for label, _, _ in rows_for_expl
+            ]
+            zone_top = H - footer_h - explainer_h
+            draw.rectangle([0, zone_top, W, zone_top + explainer_h], fill=cfg.bg_color)
+            expl_font_size = max(6, round(_expl_line_h * 0.62))
+            expl_font = get_font(expl_font_size, condensed=True)
+            inner_h   = explainer_h - 4
+            # Two-column layout: split items into two roughly equal rows
+            half = (len(items) + 1) // 2
+            line1 = "  \u00b7  ".join(items[:half])
+            line2 = "  \u00b7  ".join(items[half:])
+            avail_w = W - PAD * 2
+            for line in (line1, line2):
+                while line and expl_font.getbbox(line)[2] > avail_w:
+                    line = line.rsplit("  \u00b7  ", 1)[0]
+            line_h = _expl_line_h
+            y1 = zone_top + 3
+            y2 = y1 + line_h
+            self._draw_center_text(draw, line1, PAD, line_h, W - PAD * 2,
+                                   expl_font, "#666666", y_offset=y1)
+            self._draw_center_text(draw, line2, PAD, line_h, W - PAD * 2,
+                                   expl_font, "#666666", y_offset=y2)
 
         return img
 

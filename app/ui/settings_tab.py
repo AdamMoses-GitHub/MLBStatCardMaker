@@ -62,7 +62,7 @@ class SettingsTab(ttk.Frame):
         self._dpi_var = tk.IntVar(value=self.settings.dpi)
         dpi_row = ttk.Frame(dpi_frame)
         dpi_row.pack(anchor="w", **pad)
-        for dpi_val in (72, 150, 300):
+        for dpi_val in (72, 150, 300, 600, 900, 1200, 1500, 1800):
             ttk.Radiobutton(dpi_row, text=str(dpi_val), variable=self._dpi_var,
                             value=dpi_val).pack(side="left", padx=4)
         ttk.Label(dpi_row, text="Custom:").pack(side="left", padx=(16, 0))

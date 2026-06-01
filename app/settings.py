@@ -28,6 +28,7 @@ class Settings:
     standings_show_timestamp: bool = False
     standings_width_in: float = 6.0
     standings_height_in: float = 4.0
+    standings_use_global_size: bool = False
     standings_bg_color: str = "#FFFFFF"
     standings_export_filename: str = "standings_card"
     standings_append_timestamp: bool = True
@@ -46,6 +47,7 @@ class Settings:
     batters_show_logos: bool = True
     batters_width_in: float = 7.0
     batters_height_in: float = 5.0
+    batters_use_global_size: bool = False
     batters_bg_color: str = "#FFFFFF"
     batters_export_filename: str = "batters_card"
     batters_append_timestamp: bool = True
@@ -65,6 +67,7 @@ class Settings:
     pitchers_show_logos: bool = True
     pitchers_width_in: float = 7.0
     pitchers_height_in: float = 5.0
+    pitchers_use_global_size: bool = False
     pitchers_bg_color: str = "#FFFFFF"
     pitchers_export_filename: str = "pitchers_card"
     pitchers_append_timestamp: bool = True
@@ -84,6 +87,7 @@ class Settings:
     history_show_col_explainers: bool = False
     history_width_in: float = 6.0
     history_height_in: float = 5.0
+    history_use_global_size: bool = False
     history_bg_color: str = "#FFFFFF"
     history_export_filename: str = "history_card"
     history_append_timestamp: bool = True
@@ -102,6 +106,7 @@ class Settings:
     roster_hide_dh: bool = False
     roster_width_in: float = 5.0
     roster_height_in: float = 7.0
+    roster_use_global_size: bool = False
     roster_bg_color: str = "#FFFFFF"
     roster_export_filename: str = "roster_card"
     roster_append_timestamp: bool = True
@@ -116,6 +121,7 @@ class Settings:
     matchup_show_timestamp: bool = False
     matchup_width_in: float = 6.5
     matchup_height_in: float = 5.5
+    matchup_use_global_size: bool = False
     matchup_bg_color: str = "#FFFFFF"
     matchup_export_filename: str = "matchup_card"
     matchup_append_timestamp: bool = True
@@ -136,6 +142,7 @@ class Settings:
     triple_crown_pitching_stats: list = field(default_factory=lambda: ["W", "SO", "ERA"])
     triple_crown_width_in: float = 9.0
     triple_crown_height_in: float = 6.0
+    triple_crown_use_global_size: bool = False
     triple_crown_bg_color: str = "#FFFFFF"
     triple_crown_export_filename: str = "triple_crown_card"
     triple_crown_append_timestamp: bool = True
@@ -155,6 +162,7 @@ class Settings:
     career_show_col_explainers: bool = False
     career_width_in: float = 7.0
     career_height_in: float = 6.0
+    career_use_global_size: bool = False
     career_bg_color: str = "#FFFFFF"
     career_export_filename: str = "career_card"
     career_append_timestamp: bool = True
@@ -164,6 +172,7 @@ class Settings:
     batters_show_col_explainers: bool = False
     pitchers_show_col_explainers: bool = False
     roster_show_col_explainers: bool = False
+    matchup_show_col_explainers: bool = False
     col_explainer_sep: str = "="
 
     # Export canvas margin

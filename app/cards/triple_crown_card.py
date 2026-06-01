@@ -48,10 +48,11 @@ _SCOPE_LOGO: dict[str, str] = {
 }
 
 # Distinct dark colors for the three panel sub-headers
+# Note: must not match title_bg ("#1a3a5c") used for the overall title bar
 _PANEL_HEADER_COLORS: list[str] = [
-    "#1a3a5c",  # deep blue
-    "#5c1a2a",  # deep crimson
-    "#1a5c2a",  # deep green
+    "#2e6da4",  # medium blue  (title_bg is deep #1a3a5c — clearly distinct)
+    "#8b1a2a",  # deep crimson
+    "#1a6b3a",  # deep green
 ]
 
 _BADGE_COLORS = {
@@ -98,6 +99,7 @@ class TripleCrownCardConfig(CardConfig):
     row_alt_color: str = "#EEF2F7"
     row_color: str = "#FFFFFF"
     divider_color: str = "#CCCCCC"
+    panel_divider_color: str = "#888888"
     text_color: str = "#111111"
     footer_color: str = "#888888"
 
@@ -122,7 +124,7 @@ class TripleCrownCardRenderer:
 
         W, H  = cfg.width_px, cfg.height_px
         PAD   = max(8, round(W * 0.012))
-        GUTTER = max(4, round(W * 0.008))
+        GUTTER = max(8, round(W * 0.016))
 
         num_rows = max((len(c.entries) for c in block.columns), default=1)
 
@@ -269,7 +271,7 @@ class TripleCrownCardRenderer:
         for i in (1, 2):
             gx = PAD + i * panel_w + (i - 1) * GUTTER + GUTTER // 2
             draw.line([gx, gutter_top, gx, gutter_bot],
-                      fill=cfg.divider_color, width=1)
+                      fill=cfg.panel_divider_color, width=3)
 
         # --- Footer ---
         if cfg.show_timestamp and footer_h:

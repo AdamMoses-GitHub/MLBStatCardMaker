@@ -60,23 +60,33 @@ class StandingsTab(ttk.Frame):
         row = ttk.Frame(size_frame)
         row.pack(anchor="w", **pad)
         ttk.Label(row, text="W (in):").pack(side="left")
-        w_spin = ttk.Spinbox(row, from_=2.0, to=24.0, increment=0.5,
+        self._w_spin = ttk.Spinbox(row, from_=2.0, to=24.0, increment=0.5,
                               textvariable=self._width_var, width=5)
-        w_spin.pack(side="left", padx=3)
-        w_spin.bind("<FocusOut>", self._on_size_changed)
-        w_spin.bind("<<Increment>>", self._on_size_changed)
-        w_spin.bind("<<Decrement>>", self._on_size_changed)
+        self._w_spin.pack(side="left", padx=3)
+        self._w_spin.bind("<FocusOut>", self._on_size_changed)
+        self._w_spin.bind("<<Increment>>", self._on_size_changed)
+        self._w_spin.bind("<<Decrement>>", self._on_size_changed)
 
         ttk.Label(row, text="H (in):").pack(side="left", padx=(8, 0))
-        h_spin = ttk.Spinbox(row, from_=2.0, to=24.0, increment=0.5,
+        self._h_spin = ttk.Spinbox(row, from_=2.0, to=24.0, increment=0.5,
                               textvariable=self._height_var, width=5)
-        h_spin.pack(side="left", padx=3)
-        h_spin.bind("<FocusOut>", self._on_size_changed)
-        h_spin.bind("<<Increment>>", self._on_size_changed)
-        h_spin.bind("<<Decrement>>", self._on_size_changed)
+        self._h_spin.pack(side="left", padx=3)
+        self._h_spin.bind("<FocusOut>", self._on_size_changed)
+        self._h_spin.bind("<<Increment>>", self._on_size_changed)
+        self._h_spin.bind("<<Decrement>>", self._on_size_changed)
+
+        self._use_global_size_var = tk.BooleanVar(
+            value=self.settings.standings_use_global_size)
+        ttk.Checkbutton(size_frame, text="Use global size",
+                        variable=self._use_global_size_var,
+                        command=self._on_use_global_size_changed).pack(
+            anchor="w", padx=8, pady=(0, 2))
 
         self._orient_lbl = ttk.Label(size_frame, text="", foreground="#555555")
         self._orient_lbl.pack(anchor="w", padx=8, pady=(0, 4))
+        if self.settings.standings_use_global_size:
+            self._w_spin.config(state="disabled")
+            self._h_spin.config(state="disabled")
         self._update_orientation_label()
 
         # ---- Scope ----
@@ -198,8 +208,12 @@ class StandingsTab(ttk.Frame):
     # ------------------------------------------------------------------
     def _update_orientation_label(self) -> None:
         try:
-            w = self._width_var.get()
-            h = self._height_var.get()
+            if self._use_global_size_var.get():
+                w = self.settings.card_width_in
+                h = self.settings.card_height_in
+            else:
+                w = self._width_var.get()
+                h = self._height_var.get()
         except tk.TclError:
             return
         label = "Landscape" if w >= h else "Portrait"
@@ -208,6 +222,13 @@ class StandingsTab(ttk.Frame):
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
         self._update_col_suggestion()
+
+    def _on_use_global_size_changed(self) -> None:
+        use_global = self._use_global_size_var.get()
+        state = "disabled" if use_global else "normal"
+        self._w_spin.config(state=state)
+        self._h_spin.config(state=state)
+        self._update_orientation_label()
 
     def _update_col_suggestion(self) -> None:
         try:
@@ -337,8 +358,8 @@ class StandingsTab(ttk.Frame):
 
     def _build_card_config(self) -> StandingsCardConfig:
         return StandingsCardConfig(
-            width_in=self._width_var.get(),
-            height_in=self._height_var.get(),
+            width_in=self.settings.card_width_in if self._use_global_size_var.get() else self._width_var.get(),
+            height_in=self.settings.card_height_in if self._use_global_size_var.get() else self._height_var.get(),
             dpi=self.settings.dpi,
             bg_color=self._bg_var.get(),
             scope=self._scope_var.get(),
@@ -435,6 +456,7 @@ class StandingsTab(ttk.Frame):
     def apply(self) -> None:
         self.settings.standings_width_in = self._width_var.get()
         self.settings.standings_height_in = self._height_var.get()
+        self.settings.standings_use_global_size = self._use_global_size_var.get()
         self.settings.standings_scope = self._scope_var.get()
         self.settings.standings_column_mode = self._col_mode_var.get()
         self.settings.standings_show_logos = self._show_logos_var.get()
