@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue) ![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python) ![License](https://img.shields.io/badge/license-MIT-green)
 
-![App Screenshot](INSERT_IMAGE_URL_HERE)
+![App Screenshot](screenshot.jpg)
 
 ---
 

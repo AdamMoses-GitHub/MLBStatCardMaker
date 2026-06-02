@@ -32,6 +32,10 @@ logos/
 *.jpg
 *.jpeg
 
+# Allow root-level screenshot
+!screenshot.jpg
+!screenshot.png
+
 # OS
 Thumbs.db
 .DS_Store
