@@ -235,10 +235,11 @@ class StandingsTab(ttk.Frame):
         self._w_spin.config(state=state)
         self._h_spin.config(state=state)
         self._update_orientation_label()
+        self._update_col_suggestion()
 
     def _update_col_suggestion(self) -> None:
         try:
-            w = self._width_var.get()
+            w = self.settings.card_width_in if self._use_global_size_var.get() else self._width_var.get()
         except tk.TclError:
             return
         suggested = suggest_column_mode(w)

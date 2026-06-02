@@ -305,6 +305,7 @@ class PitcherTab(ttk.Frame):
         self._w_spin.config(state=state)
         self._h_spin.config(state=state)
         self._update_orientation_label()
+        self._update_col_suggestion()
 
     def _on_type_changed(self, *_) -> None:
         """Swap Min IP / Min G qualifier row based on selected pitcher type."""
@@ -320,7 +321,7 @@ class PitcherTab(ttk.Frame):
 
     def _update_col_suggestion(self) -> None:
         try:
-            w = self._width_var.get()
+            w = self.settings.card_width_in if self._use_global_size_var.get() else self._width_var.get()
         except tk.TclError:
             return
         suggested = suggest_column_mode(w)
