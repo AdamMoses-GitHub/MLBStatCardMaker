@@ -167,6 +167,22 @@ class Settings:
     career_export_filename: str = "career_card"
     career_append_timestamp: bool = True
 
+    # Game Record card
+    game_record_team: str = "New York Yankees"
+    game_record_mode: str = "games"              # "games" | "series"
+    game_record_n: int = 10
+    game_record_series_detail: str = "result_only"   # "result_only" | "scores"
+    game_record_show_logos: bool = True
+    game_record_show_summary: bool = True
+    game_record_show_timestamp: bool = False
+    game_record_width_in: float = 6.0
+    game_record_height_in: float = 8.0           # portrait default
+    game_record_use_global_size: bool = False
+    game_record_bg_color: str = "#FFFFFF"
+    game_record_export_filename: str = "game_record_card"
+    game_record_append_timestamp: bool = True
+    game_record_date_sort: str = "desc"       # "asc" | "desc"
+
     # Column explainers (all cards)
     standings_show_col_explainers: bool = False
     batters_show_col_explainers: bool = False

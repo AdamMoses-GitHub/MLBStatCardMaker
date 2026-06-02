@@ -19,6 +19,7 @@ from app.ui.roster_tab import RosterTab
 from app.ui.matchup_tab import MatchupTab
 from app.ui.triple_crown_tab import TripleCrownTab
 from app.ui.career_tab import CareerTab
+from app.ui.game_record_tab import GameRecordTab
 
 
 class MainWindow(tk.Tk):
@@ -48,6 +49,7 @@ class MainWindow(tk.Tk):
         self._matchup_tab      = MatchupTab(self.notebook, self.settings)
         self._triple_crown_tab = TripleCrownTab(self.notebook, self.settings)
         self._career_tab       = CareerTab(self.notebook, self.settings)
+        self._game_record_tab  = GameRecordTab(self.notebook, self.settings)
 
         self.notebook.add(self._standings_tab,   text="  Standings  ")
         self.notebook.add(self._batter_tab,      text="  Top Batters  ")
@@ -57,6 +59,7 @@ class MainWindow(tk.Tk):
         self.notebook.add(self._roster_tab,      text="  Team Roster  ")
         self.notebook.add(self._matchup_tab,     text="  Matchup  ")
         self.notebook.add(self._career_tab,      text="  Player Career  ")
+        self.notebook.add(self._game_record_tab, text="  Game Record  ")
         self.notebook.add(self._settings_tab,    text="  Settings  ")
 
         # --- Persistent bottom bar ---
@@ -101,6 +104,7 @@ class MainWindow(tk.Tk):
         self._matchup_tab.apply()
         self._triple_crown_tab.apply()
         self._career_tab.apply()
+        self._game_record_tab.apply()
         self.settings.window_geometry = self.geometry()
         try:
             self.settings.save(self.settings.working_dir)
