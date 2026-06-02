@@ -298,6 +298,20 @@ def _build_block(
             last_n_series = list(last_n_series)
         else:
             last_n_series = list(reversed(last_n_series))
+        # Apply same sort direction to games within each series
+        if date_sort == "desc":
+            last_n_series = [
+                SeriesEntry(
+                    opponent_name=s.opponent_name,
+                    opponent_abbrev=s.opponent_abbrev,
+                    opponent_id=s.opponent_id,
+                    is_home=s.is_home,
+                    date_range=s.date_range,
+                    series_result=s.series_result,
+                    games=list(reversed(s.games)),
+                )
+                for s in last_n_series
+            ]
         span_w = sum(1 for s in last_n_series if s.series_result.startswith("W"))
         span_l = sum(1 for s in last_n_series if s.series_result.startswith("L"))
         span_s = sum(1 for s in last_n_series if s.series_result.startswith("S"))
