@@ -77,10 +77,10 @@ class StandingsTab(ttk.Frame):
 
         self._use_global_size_var = tk.BooleanVar(
             value=self.settings.standings_use_global_size)
-        ttk.Checkbutton(size_frame, text="Use global size",
-                        variable=self._use_global_size_var,
-                        command=self._on_use_global_size_changed).pack(
-            anchor="w", padx=8, pady=(0, 2))
+        self._use_global_chk = ttk.Checkbutton(
+            size_frame, variable=self._use_global_size_var,
+            command=self._on_use_global_size_changed)
+        self._use_global_chk.pack(anchor="w", padx=8, pady=(0, 2))
 
         self._orient_lbl = ttk.Label(size_frame, text="", foreground="#555555")
         self._orient_lbl.pack(anchor="w", padx=8, pady=(0, 4))
@@ -88,6 +88,7 @@ class StandingsTab(ttk.Frame):
             self._w_spin.config(state="disabled")
             self._h_spin.config(state="disabled")
         self._update_orientation_label()
+        self._refresh_global_size_label()
 
         # ---- Scope ----
         scope_frame = ttk.LabelFrame(parent, text="Scope")
@@ -222,6 +223,11 @@ class StandingsTab(ttk.Frame):
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
         self._update_col_suggestion()
+
+    def _refresh_global_size_label(self) -> None:
+        w = self.settings.card_width_in
+        h = self.settings.card_height_in
+        self._use_global_chk.config(text=f"Use global size ({w:g} \u00d7 {h:g} in)")
 
     def _on_use_global_size_changed(self) -> None:
         use_global = self._use_global_size_var.get()
@@ -457,6 +463,7 @@ class StandingsTab(ttk.Frame):
         self.settings.standings_width_in = self._width_var.get()
         self.settings.standings_height_in = self._height_var.get()
         self.settings.standings_use_global_size = self._use_global_size_var.get()
+        self._refresh_global_size_label()
         self.settings.standings_scope = self._scope_var.get()
         self.settings.standings_column_mode = self._col_mode_var.get()
         self.settings.standings_show_logos = self._show_logos_var.get()

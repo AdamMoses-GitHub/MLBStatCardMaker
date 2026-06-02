@@ -76,10 +76,10 @@ class TripleCrownTab(ttk.Frame):
 
         self._use_global_size_var = tk.BooleanVar(
             value=self.settings.triple_crown_use_global_size)
-        ttk.Checkbutton(size_frame, text="Use global size",
-                        variable=self._use_global_size_var,
-                        command=self._on_use_global_size_changed).pack(
-            anchor="w", padx=8, pady=(0, 2))
+        self._use_global_chk = ttk.Checkbutton(
+            size_frame, variable=self._use_global_size_var,
+            command=self._on_use_global_size_changed)
+        self._use_global_chk.pack(anchor="w", padx=8, pady=(0, 2))
 
         self._orient_lbl = ttk.Label(size_frame, text="", foreground="#555555")
         self._orient_lbl.pack(anchor="w", padx=8, pady=(0, 4))
@@ -87,6 +87,7 @@ class TripleCrownTab(ttk.Frame):
             self._w_spin.config(state="disabled")
             self._h_spin.config(state="disabled")
         self._update_orientation_label()
+        self._refresh_global_size_label()
 
         # ---- Stat Type ----
         type_frame = ttk.LabelFrame(parent, text="Stat Type")
@@ -321,6 +322,11 @@ class TripleCrownTab(ttk.Frame):
     def _on_size_changed(self, *_) -> None:
         self._update_orientation_label()
 
+    def _refresh_global_size_label(self) -> None:
+        w = self.settings.card_width_in
+        h = self.settings.card_height_in
+        self._use_global_chk.config(text=f"Use global size ({w:g} \u00d7 {h:g} in)")
+
     def _on_use_global_size_changed(self) -> None:
         use_global = self._use_global_size_var.get()
         state = "disabled" if use_global else "normal"
@@ -544,6 +550,7 @@ class TripleCrownTab(ttk.Frame):
         self.settings.triple_crown_width_in     = self._width_var.get()
         self.settings.triple_crown_height_in    = self._height_var.get()
         self.settings.triple_crown_use_global_size = self._use_global_size_var.get()
+        self._refresh_global_size_label()
         self.settings.triple_crown_bg_color     = self._bg_var.get()
         self.settings.triple_crown_export_filename = self._export_name_var.get().strip()
         self.settings.triple_crown_append_timestamp = self._append_ts_var.get()
