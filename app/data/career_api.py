@@ -260,8 +260,13 @@ def fetch_career(
                 block = _load_disk_cache(cache_file, stat_type)
                 _mem[cache_key] = (block, mtime)
                 return _apply_year_filter(block, year_start, year_end)
-            except Exception:
-                logger.warning("Ignoring corrupt career cache: %s", cache_file)
+            except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+                try:
+                    os.remove(cache_file)
+                    logger.warning("Removed corrupt career cache %s: %s", cache_file, exc)
+                except OSError:
+                    logger.warning("Ignoring corrupt career cache: %s", cache_file)
+
 
     # Live fetch
     block = _fetch_live(player_id, player_name, stat_type, group)
@@ -583,8 +588,10 @@ def _save_disk_cache(path: str, block: CareerBlock) -> None:
         "as_of":               block.as_of.isoformat(),
         "entries":             [asdict(e) for e in block.entries],
     }
-    with open(path, "w", encoding="utf-8") as f:
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
+    os.replace(tmp_path, path)
 
 
 def _load_disk_cache(path: str, stat_type: str) -> CareerBlock:

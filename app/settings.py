@@ -242,8 +242,18 @@ class Settings:
             return
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         data = {k: v for k, v in asdict(self).items() if not k.startswith("_")}
-        with open(self._path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
+        tmp_path = f"{self._path}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2)
+            os.replace(tmp_path, self._path)
+        except OSError as exc:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            logger.warning("Could not save settings to %s: %s", self._path, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +299,14 @@ def init_working_dir(working_dir: str) -> None:
         os.makedirs(os.path.join(working_dir, subdir), exist_ok=True)
     readme = os.path.join(working_dir, "readme.txt")
     if not os.path.exists(readme):
+        tmp_path = f"{readme}.tmp"
         try:
-            with open(readme, "w", encoding="utf-8") as fh:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
                 fh.write(_README)
+            os.replace(tmp_path, readme)
         except OSError:
-            pass
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass

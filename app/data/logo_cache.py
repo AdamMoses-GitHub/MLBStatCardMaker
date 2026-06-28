@@ -10,6 +10,9 @@ from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
+_HTTP = requests.Session()
+_HTTP.headers.update({"User-Agent": "MLBStatCardMaker/1.0"})
+
 # MLB static CDN team logo URL (PNG, fallback only)
 _LOGO_PNG_TEMPLATE = "https://content.mlb.com/images/teams/logos/small/{team_id}.png"
 
@@ -56,6 +59,30 @@ def _cache_path(working_dir: str, abbrev: str) -> str:
     return os.path.join(logos_dir, f"{abbrev}.png")
 
 
+def _download_image(url: str, timeout: int = 8) -> Optional[Image.Image]:
+    try:
+        resp = _HTTP.get(url, timeout=timeout)
+        resp.raise_for_status()
+        return Image.open(io.BytesIO(resp.content)).convert("RGBA")
+    except (requests.RequestException, UnidentifiedImageError, OSError) as exc:
+        logger.warning("Logo download failed (%s): %s", url, exc)
+        return None
+
+
+def _save_cache_image(path: str, image: Image.Image) -> None:
+    tmp_path = f"{path}.tmp"
+    try:
+        image.save(tmp_path, "PNG")
+        os.replace(tmp_path, path)
+    except OSError:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def get_logo(abbrev: str, size_px: int, working_dir: str) -> Optional[Image.Image]:
     """
     Return a PIL Image of the team logo at size_px × size_px.
@@ -73,7 +100,8 @@ def get_logo(abbrev: str, size_px: int, working_dir: str) -> Optional[Image.Imag
     # Return cached version if it exists
     if os.path.isfile(cache):
         try:
-            img = Image.open(cache).convert("RGBA")
+            with Image.open(cache) as cached:
+                img = cached.convert("RGBA")
             img = img.resize((size_px, size_px), Image.LANCZOS)
             return img
         except (UnidentifiedImageError, OSError) as exc:
@@ -86,43 +114,40 @@ def get_logo(abbrev: str, size_px: int, working_dir: str) -> Optional[Image.Imag
     # League/scope logos (MLB, AL, NL, divisions) use a fixed URL
     league_url = _LEAGUE_LOGO_URL.get(abbrev)
     if league_url:
-        try:
-            resp = requests.get(league_url, timeout=8)
-            resp.raise_for_status()
-            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-            img.save(cache, "PNG")
+        img = _download_image(league_url)
+        if img is not None:
+            try:
+                _save_cache_image(cache, img)
+            except OSError as exc:
+                logger.warning("Could not persist league logo cache for %s: %s", abbrev, exc)
             img = img.resize((size_px, size_px), Image.LANCZOS)
             return img
-        except Exception as exc:
-            logger.warning("Could not download league logo for %s: %s", abbrev, exc)
         return None
 
     # Download from ESPN CDN
     espn_abbrev = _ESPN_ABBREV_OVERRIDE.get(abbrev, abbrev.lower())
     url = _ESPN_LOGO_TEMPLATE.format(abbrev=espn_abbrev)
-    try:
-        resp = requests.get(url, timeout=8)
-        resp.raise_for_status()
-        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-        img.save(cache, "PNG")
+    img = _download_image(url)
+    if img is not None:
+        try:
+            _save_cache_image(cache, img)
+        except OSError as exc:
+            logger.warning("Could not persist logo cache for %s: %s", abbrev, exc)
         img = img.resize((size_px, size_px), Image.LANCZOS)
         return img
-    except Exception as exc:
-        logger.warning("Could not download logo for %s: %s", abbrev, exc)
 
     # Fallback: MLB static CDN
     team_id = TEAM_ID_MAP.get(abbrev)
     if team_id:
         url2 = _LOGO_PNG_TEMPLATE.format(team_id=team_id)
-        try:
-            resp = requests.get(url2, timeout=8)
-            resp.raise_for_status()
-            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-            img.save(cache, "PNG")
+        img = _download_image(url2)
+        if img is not None:
+            try:
+                _save_cache_image(cache, img)
+            except OSError as exc:
+                logger.warning("Could not persist fallback logo cache for %s: %s", abbrev, exc)
             img = img.resize((size_px, size_px), Image.LANCZOS)
             return img
-        except Exception as exc2:
-            logger.warning("MLB CDN fallback failed for %s: %s", abbrev, exc2)
 
     return None
 
@@ -132,4 +157,7 @@ def clear_logo_cache(working_dir: str) -> None:
     if os.path.isdir(logos_dir):
         for f in os.listdir(logos_dir):
             if f.endswith(".png"):
-                os.remove(os.path.join(logos_dir, f))
+                try:
+                    os.remove(os.path.join(logos_dir, f))
+                except OSError as exc:
+                    logger.warning("Could not remove cached logo %s: %s", f, exc)

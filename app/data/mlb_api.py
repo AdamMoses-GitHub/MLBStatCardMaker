@@ -216,12 +216,19 @@ def _dict_to_block(data: dict) -> StandingsBlock:
 def _write_disk_cache(block: StandingsBlock, working_dir: str, season: int) -> None:
     if not working_dir:
         return
+    path = _disk_cache_path(working_dir, season)
+    tmp_path = f"{path}.tmp"
     try:
-        path = _disk_cache_path(working_dir, season)
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(tmp_path, "w", encoding="utf-8") as fh:
             json.dump(_block_to_dict(block), fh, indent=2)
+        os.replace(tmp_path, path)
         logger.debug("Standings disk cache written: %s", path)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
         logger.warning("Could not write standings disk cache: %s", exc)
 
 
@@ -237,7 +244,12 @@ def _read_disk_cache(working_dir: str, season: int) -> Optional[StandingsBlock]:
         block = _dict_to_block(data)
         logger.debug("Standings disk cache read: %s (as_of=%s)", path, block.as_of)
         return block
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        try:
+            os.remove(path)
+            logger.warning("Removed corrupt standings disk cache: %s", path)
+        except OSError:
+            pass
         logger.warning("Could not read standings disk cache: %s", exc)
         return None
 
