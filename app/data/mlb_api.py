@@ -25,6 +25,7 @@ class StandingsEntry:
     league_name: str   # "AL" or "NL"
     wins: int
     losses: int
+    games_left: int
     pct: str           # e.g. ".600"
     gb: str            # e.g. "3.0" or "-" for first place
     home_record: str   # e.g. "25-12"
@@ -121,6 +122,10 @@ def fetch_standings(season: Optional[int] = None) -> StandingsBlock:
             split_records = team_rec.get("records", {}).get("splitRecords", [])
             streak_info = team_rec.get("streak", {})
             streak_code = streak_info.get("streakCode", "")
+            wins = int(team_rec.get("wins", 0))
+            losses = int(team_rec.get("losses", 0))
+            games_played = int(team_rec.get("gamesPlayed", wins + losses))
+            games_left = max(0, 162 - games_played)
 
             entry = StandingsEntry(
                 team_id=int(team.get("id", 0)),
@@ -129,8 +134,9 @@ def fetch_standings(season: Optional[int] = None) -> StandingsBlock:
                 division_id=div_id,
                 division_name=division_name,
                 league_name=league_short,
-                wins=int(team_rec.get("wins", 0)),
-                losses=int(team_rec.get("losses", 0)),
+                wins=wins,
+                losses=losses,
+                games_left=games_left,
                 pct=team_rec.get("winningPercentage", ".000"),
                 gb=str(team_rec.get("gamesBack", "-")),
                 home_record=_split_record(split_records, "home"),
@@ -203,7 +209,15 @@ def _block_to_dict(block: StandingsBlock) -> dict:
 def _dict_to_block(data: dict) -> StandingsBlock:
     """Deserialize a StandingsBlock from a dict (as produced by _block_to_dict)."""
     def list_to_entries(lst: list[dict]) -> list[StandingsEntry]:
-        return [StandingsEntry(**d) for d in lst]
+        items: list[StandingsEntry] = []
+        for d in lst:
+            if "games_left" not in d:
+                # Backward compatibility with old cache files.
+                wins = int(d.get("wins", 0))
+                losses = int(d.get("losses", 0))
+                d = {**d, "games_left": max(0, 162 - (wins + losses))}
+            items.append(StandingsEntry(**d))
+        return items
 
     return StandingsBlock(
         as_of=datetime.datetime.fromisoformat(data["as_of"]),

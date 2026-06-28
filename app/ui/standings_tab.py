@@ -105,8 +105,8 @@ class StandingsTab(ttk.Frame):
 
         self._col_mode_var = tk.StringVar(value=self.settings.standings_column_mode)
         for val, label in (("auto", "Auto (suggested)"),
-                            ("standard", "Standard  (W L PCT GB)"),
-                            ("extended", "Extended  (+Home Away L10 Streak)")):
+                            ("standard", "Standard  (W L PCT GB GL)"),
+                            ("extended", "Extended  (+GL Home Away L10 Streak)")):
             ttk.Radiobutton(col_frame, text=label, variable=self._col_mode_var,
                             value=val, command=self._update_col_suggestion).pack(
                 anchor="w", padx=8, pady=1)
@@ -169,7 +169,7 @@ class StandingsTab(ttk.Frame):
         self._status_lbl.pack(anchor="w", padx=8, pady=2)
 
         # ---- Export ----
-        export_frame = ttk.LabelFrame(parent, text="Export")
+        export_frame = ttk.LabelFrame(parent, text="Save")
         export_frame.pack(fill="x", padx=8, pady=(4, 8))
 
         self._export_name_var = tk.StringVar(
@@ -179,6 +179,14 @@ class StandingsTab(ttk.Frame):
         ttk.Entry(export_frame, textvariable=self._export_name_var, width=24).pack(
             fill="x", padx=8, pady=2)
 
+        self._save_fmt_var = tk.StringVar(value="PNG")
+        fmt_row = ttk.Frame(export_frame)
+        fmt_row.pack(anchor="w", padx=8, pady=(0, 2))
+        ttk.Label(fmt_row, text="Format:").pack(side="left")
+        ttk.Combobox(fmt_row, textvariable=self._save_fmt_var,
+                     values=("PNG", "JPEG"), state="readonly", width=8).pack(
+            side="left", padx=4)
+
         self._append_ts_var = tk.BooleanVar(
             value=self.settings.standings_append_timestamp)
         ttk.Checkbutton(export_frame, text="Append timestamp to filename",
@@ -187,14 +195,14 @@ class StandingsTab(ttk.Frame):
 
         btn_row = ttk.Frame(export_frame)
         btn_row.pack(fill="x", padx=8, pady=(2, 8))
-        self._export_png_btn = ttk.Button(btn_row, text="Export PNG",
-                                           command=lambda: self._export("PNG"),
-                                           state="disabled")
-        self._export_png_btn.pack(side="left", padx=(0, 4))
-        self._export_jpg_btn = ttk.Button(btn_row, text="Export JPG",
-                                           command=lambda: self._export("JPEG"),
-                                           state="disabled")
-        self._export_jpg_btn.pack(side="left")
+        self._save_btn = ttk.Button(btn_row, text="Save",
+                                     command=self._save,
+                                     state="disabled")
+        self._save_btn.pack(side="left", padx=(0, 4))
+        self._save_as_btn = ttk.Button(btn_row, text="Save As...",
+                                        command=self._save_as,
+                                        state="disabled")
+        self._save_as_btn.pack(side="left")
 
     def _build_preview(self, parent: ttk.LabelFrame) -> None:
         self._canvas = tk.Canvas(parent, bg="#CCCCCC", width=THUMB_W, height=THUMB_H)
@@ -347,8 +355,8 @@ class StandingsTab(ttk.Frame):
             else:
                 self._set_status(status, error=False)
             self._full_preview_btn.config(state="normal")
-            self._export_png_btn.config(state="normal")
-            self._export_jpg_btn.config(state="normal")
+            self._save_btn.config(state="normal")
+            self._save_as_btn.config(state="normal")
         except Exception as exc:
             self._on_fetch_error(f"Render error: {exc}")
         finally:
@@ -414,9 +422,15 @@ class StandingsTab(ttk.Frame):
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
-    def _export(self, fmt: str) -> None:
+    def _save(self) -> None:
+        self._export(self._save_fmt_var.get(), save_as=False)
+
+    def _save_as(self) -> None:
+        self._export(self._save_fmt_var.get(), save_as=True)
+
+    def _export(self, fmt: str, save_as: bool = False) -> None:
         if self._card_image is None:
-            messagebox.showwarning("Nothing to export",
+            messagebox.showwarning("Nothing to save",
                                    "Generate a preview first.")
             return
         working_dir = self.settings.working_dir
@@ -447,15 +461,25 @@ class StandingsTab(ttk.Frame):
             base = f"{base}_{ts}"
         filename = base + ext
         out_path = os.path.join(output_dir, filename)
+        if save_as:
+            out_path = filedialog.asksaveasfilename(
+                title="Save Card As",
+                initialdir=output_dir,
+                initialfile=filename,
+                defaultextension=ext,
+                filetypes=[("PNG image", "*.png"), ("JPEG image", "*.jpg *.jpeg")],
+            )
+            if not out_path:
+                return
         try:
             cfg = self._build_card_config()
             export_img = apply_export_margin(
                 self._card_image, cfg.bg_color,
                 self.settings.export_canvas_margin_pct)
             saved = cfg.export(export_img, out_path, fmt)
-            messagebox.showinfo("Exported", f"Saved to:\n{saved}")
+            messagebox.showinfo("Saved", f"Saved to:\n{saved}")
         except Exception as exc:
-            messagebox.showerror("Export Failed", str(exc))
+            messagebox.showerror("Save Failed", str(exc))
 
     # ------------------------------------------------------------------
     # Persist settings

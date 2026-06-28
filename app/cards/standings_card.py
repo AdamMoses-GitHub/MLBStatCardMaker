@@ -15,8 +15,8 @@ from app.utils.font_manager import get_font
 # Column definitions
 # ---------------------------------------------------------------------------
 
-STANDARD_COLS = ["TEAM", "W", "L", "PCT", "GB"]
-EXTENDED_COLS = ["TEAM", "W", "L", "PCT", "GB", "HOME", "AWAY", "L10", "STK"]
+STANDARD_COLS = ["TEAM", "W", "L", "PCT", "GB", "GL"]
+EXTENDED_COLS = ["TEAM", "W", "L", "PCT", "GB", "GL", "HOME", "AWAY", "L10", "STK"]
 
 # Minimum card width (inches) to comfortably show extended columns
 EXTENDED_MIN_WIDTH_IN = 5.0
@@ -28,6 +28,7 @@ _COL_WEIGHTS: dict[str, float] = {
     "L":    0.9,
     "PCT":  1.1,
     "GB":   1.1,
+    "GL":   1.0,
     "HOME": 1.3,
     "AWAY": 1.3,
     "L10":  1.0,
@@ -40,6 +41,7 @@ _COL_EXPLAINERS: dict[str, str] = {
     "L":    "Losses",
     "PCT":  "Win%",
     "GB":   "Games Behind",
+    "GL":   "Games Left",
     "HOME": "Home Record",
     "AWAY": "Away Record",
     "L10":  "Last 10 Games",
@@ -136,6 +138,7 @@ def _get_col_value(entry: StandingsEntry, col: str) -> str:
         "L":    str(entry.losses),
         "PCT":  entry.pct,
         "GB":   entry.gb,
+        "GL":   str(entry.games_left),
         "HOME": entry.home_record,
         "AWAY": entry.away_record,
         "L10":  entry.last_ten,
